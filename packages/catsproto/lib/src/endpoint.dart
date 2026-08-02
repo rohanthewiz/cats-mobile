@@ -35,30 +35,42 @@ class Endpoint {
     this.pinnedSha256,
   });
 
-  /// Parses a `cats://pair?url=…&token=…&fp=…` URI as minted by `catctl pair`.
+  /// Parses the `cats://pair?u=…&t=…&f=…` deep link `catctl pair` renders into
+  /// a QR code.
   ///
-  /// Returns null rather than throwing on anything malformed: this arrives from
-  /// a camera scanning an arbitrary QR code in the world, so "not one of ours"
-  /// is the common case and not an error.
+  /// The keys are single letters because the URI has to fit a scannable symbol:
+  /// a typical LAN pairing URI is 141 bytes, which is a version-8 QR, and cats
+  /// has a test (`TestPairURIFitsAQRCode`) asserting it stays there. Spelling
+  /// them out would spend that budget on nothing a human reads.
+  ///
+  /// The grant's expiry is deliberately NOT in the URI for the same reason. It
+  /// is five minutes and single use; the honest signal that it has run out is
+  /// the 401 from redeeming it, which the app has to handle anyway.
+  ///
+  /// Returns null rather than throwing on anything malformed. This arrives from
+  /// a camera pointed at an arbitrary QR code in the world, so "not one of
+  /// ours" is the common case, not an error.
   static PairGrant? parsePairUri(String raw) {
     final uri = Uri.tryParse(raw);
     if (uri == null || uri.scheme != 'cats' || uri.host != 'pair') return null;
-    final url = uri.queryParameters['url'];
-    final token = uri.queryParameters['token'];
-    if (url == null || token == null) return null;
+    final url = uri.queryParameters['u'];
+    final token = uri.queryParameters['t'];
+    if (url == null || token == null || token.isEmpty) return null;
     final target = Uri.tryParse(url);
     if (target == null || !target.hasAuthority) return null;
     final tls = target.scheme == 'https' || target.scheme == 'wss';
+    final port = target.hasPort ? target.port : (tls ? 443 : 80);
     return PairGrant(
       endpoint: Endpoint(
-        id: '${target.host}:${target.port}',
+        id: '${target.host}:$port',
         host: target.host,
-        port: target.port == 0 ? (tls ? 443 : 80) : target.port,
+        port: port,
         tls: tls,
-        pinnedSha256: uri.queryParameters['fp'],
+        // Empty when catway is serving plain HTTP, in which case there is
+        // nothing to pin and nothing pinning would protect.
+        pinnedSha256: uri.queryParameters['f'],
       ),
       token: token,
-      expiresAt: DateTime.tryParse(uri.queryParameters['expires_at'] ?? ''),
     );
   }
 
@@ -97,26 +109,22 @@ class Endpoint {
   String toString() => 'Endpoint($id, ${kind.name}${tls ? ', tls' : ''})';
 }
 
-/// What a scanned pairing QR yields: where to connect, the single-use grant to
-/// redeem for a session, and when that grant dies.
+/// What a scanned pairing QR yields: where to connect, with what certificate,
+/// and the single-use grant to redeem for a session.
 class PairGrant {
-  const PairGrant({
-    required this.endpoint,
-    required this.token,
-    this.expiresAt,
-  });
+  const PairGrant({required this.endpoint, required this.token});
 
   final Endpoint endpoint;
 
   /// Worth minutes and exactly one use. Redeem it at `POST /login` with
   /// `password=<token>`; what comes back is an ordinary session, which is the
   /// credential the device actually keeps.
+  ///
+  /// There is no expiry field, because the URI carries none. A grant that ran
+  /// out answers with a 401, which is a path the app has to handle regardless —
+  /// a second source of truth for the same fact would only be a way to disagree
+  /// with the server about whether the code still works.
   final String token;
-
-  final DateTime? expiresAt;
-
-  bool expiredAt(DateTime now) =>
-      expiresAt != null && !now.isBefore(expiresAt!);
 }
 
 /// Remembers per-endpoint secrets. The app backs this with

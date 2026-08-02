@@ -48,11 +48,12 @@ void main() {
 
   group('pair URI', () {
     test('parses what catctl pair mints', () {
+      // Byte-for-byte the shape catctl's pairURI builds: single-letter keys,
+      // no expiry. Verified against a live `catctl pair --json` run.
       final grant = Endpoint.parsePairUri(
-        'cats://pair?url=https%3A%2F%2F192.168.2.52%3A8443%2F'
-        '&token=abc123'
-        '&fp=aa11bb22'
-        '&expires_at=2026-08-02T09%3A00%3A00Z',
+        'cats://pair?f=aa11bb22'
+        '&t=abc123'
+        '&u=https%3A%2F%2F192.168.2.52%3A8443',
       );
       expect(grant, isNotNull);
       expect(grant!.token, 'abc123');
@@ -60,8 +61,15 @@ void main() {
       expect(grant.endpoint.port, 8443);
       expect(grant.endpoint.tls, isTrue);
       expect(grant.endpoint.pinnedSha256, 'aa11bb22');
-      expect(grant.expiredAt(DateTime.utc(2026, 8, 2, 9, 0, 1)), isTrue);
-      expect(grant.expiredAt(DateTime.utc(2026, 8, 2, 8, 59)), isFalse);
+    });
+
+    test('plain HTTP pairs with no pin, because there is nothing to pin', () {
+      final grant = Endpoint.parsePairUri(
+        'cats://pair?t=tok&u=http%3A%2F%2F10.0.0.5%3A8421',
+      )!;
+      expect(grant.endpoint.tls, isFalse);
+      expect(grant.endpoint.pinnedSha256, isNull);
+      expect(grant.endpoint.wsUri.toString(), 'ws://10.0.0.5:8421/ws');
     });
 
     test(
@@ -79,7 +87,7 @@ void main() {
 
     test('builds a /ws URL from the paired address', () {
       final grant = Endpoint.parsePairUri(
-        'cats://pair?url=https%3A%2F%2Fhost%3A9000%2F&token=t',
+        'cats://pair?u=https%3A%2F%2Fhost%3A9000&t=t',
       )!;
       expect(grant.endpoint.wsUri.toString(), 'wss://host:9000/ws');
     });
