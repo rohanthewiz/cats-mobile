@@ -1,0 +1,21 @@
+name: catsproto
+description: >-
+  The cats wire protocol in pure Dart: message shapes, the §7 command
+  vocabulary, and the connection/session layers that fold them into state.
+  No Flutter, so "no Flutter types in the protocol layer" is a compile-time
+  fact rather than a code-review convention.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+
+# No `dependencies:` block, deliberately. Everything here is dart:core,
+# dart:convert, dart:typed_data, dart:async and dart:io — the last only for
+# WebSocket.connect, which package:web_socket_channel would replace at the cost
+# of losing both the Authorization header and badCertificateCallback, the two
+# hooks the whole security model runs through.
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.0

@@ -1,0 +1,24 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    # Layer 3 of the four-layer "the phone never resizes the desktop" guard.
+    # cmd/catgen-dart marks Resize @Deprecated on the Dart side only — Go has no
+    # reason to deprecate it, since the browser sends it legitimately — and this
+    # line turns that marker from advice into a build failure.
+    deprecated_member_use: error
+    deprecated_member_use_from_same_package: error
+
+# The generated sources are NOT excluded. A generator that emits code the
+# analyzer rejects has produced a latent failure in the app repo, and the cheap
+# place to find that out is here — so wire.g.dart carries its own targeted
+# ignore_for_file lines instead of a blanket exemption.
+
+linter:
+  rules:
+    - avoid_dynamic_calls
+    - prefer_final_locals
