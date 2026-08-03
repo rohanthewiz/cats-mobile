@@ -85,6 +85,36 @@ void main() {
       expect(session.paneAgents[1]!.state, AgentState.blocked);
     });
 
+    test('the patch carries the model, and clears it when absent', () {
+      // The rows name the model rather than the agent, so a patch that dropped
+      // it would blank the label for the round trip until the next rollup —
+      // the exact lag the patch exists to avoid.
+      final session = CatsSession()
+        ..apply(Agents(items: [agent('w1:p1', AgentState.idle, pane: 1)]))
+        ..apply(
+          const PaneAgent(
+            pane: 1,
+            agent: 'copilot',
+            state: AgentState.working,
+            model: 'gpt-5-mini · medium',
+            seen: true,
+          ),
+        );
+      expect(session.roster.single.model, 'gpt-5-mini · medium');
+
+      // An agent whose model stops resolving reports it absent; the old one
+      // must not survive as a stale label.
+      session.apply(
+        const PaneAgent(
+          pane: 1,
+          agent: 'copilot',
+          state: AgentState.idle,
+          seen: true,
+        ),
+      );
+      expect(session.roster.single.model, '');
+    });
+
     test('chrome lands in its own maps, keyed by pane', () {
       final session = CatsSession()
         ..apply(const PaneTitle(pane: 4, title: 'vim'))

@@ -79,6 +79,10 @@ class CatsSession {
                 tab: a.tab,
                 agent: m.agent,
                 state: m.state,
+                // Taken from the message, not carried over from the old item:
+                // an agent whose model stopped resolving reports it absent, and
+                // a stale model must not outlive the report it came from.
+                model: m.model,
                 seen: m.seen,
                 sinceMs: 0,
               )
