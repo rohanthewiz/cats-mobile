@@ -182,6 +182,7 @@ class AgentItem {
     required this.tab,
     required this.agent,
     required this.state,
+    this.model = '',
     required this.seen,
     required this.sinceMs,
   });
@@ -194,6 +195,12 @@ class AgentItem {
   final int tab;
   final String agent;
   final String state;
+
+  /// Model is the LLM the agent is running under, in the same display spelling
+  /// PaneAgent carries ("claude-opus-5 · high") — the sidebar's agent rows name
+  /// the model rather than repeat the agent's own name, which every row shares.
+  /// Omitted when unresolved, so a row falls back to Agent.
+  final String model;
 
   /// false renders as "Done"
   final bool seen;
@@ -212,6 +219,7 @@ class AgentItem {
         tab: asInt(j['tab']),
         agent: asString(j['agent']),
         state: asString(j['state']),
+        model: asString(j['model']),
         seen: asBool(j['seen']),
         sinceMs: asInt(j['since_ms']),
       );
@@ -223,6 +231,7 @@ class AgentItem {
         'tab': tab,
         'agent': agent,
         'state': state,
+        if (model.isNotEmpty) 'model': model,
         'seen': seen,
         'since_ms': sinceMs,
       };
@@ -858,8 +867,9 @@ class Notify {
 /// PaneAgent reports one pane's agent identity + state change (also patches the
 /// Agents rollup client-side). Agent is "" for a plain shell. Model is the LLM
 /// the agent is currently running under — display text, so it may carry the
-/// reasoning effort alongside it ("claude-opus-5 · high") — omitted when unknown
-/// (only claude is resolvable today — see catway's agentmodel.go).
+/// reasoning effort alongside it ("claude-opus-5 · high") — omitted when unknown,
+/// which covers both an agent whose history catway cannot read and one that has
+/// not answered yet (see catway's agentmodel.go for which agents are readable).
 ///
 /// Wire type: `pane_agent`.
 class PaneAgent {
@@ -1426,6 +1436,21 @@ class UpdateReady {
 /// metered models is the plan's business and changes without us. An empty name
 /// means the account reports no such window and the sidebar shows no row.
 ///
+/// Memory is the share of the host machine's RAM in use — the one window here
+/// that has nothing to do with the account. It shares the section because it
+/// answers the same question the others do ("is something about to stop?") on
+/// the same glance, and it shares the poll because it is read on the same tick.
+/// Source does not describe it: it is always local, whichever source the
+/// rate-limit numbers came from. A host whose memory could not be read leaves
+/// Pct at UsagePctUnknown and the row is not drawn.
+///
+/// ReadAt is when the server took the reading (RFC 3339). It is the message's
+/// own age, and it is on the wire because the receiver cannot infer it: the
+/// stored reading is replayed to a browser that connects between polls, so
+/// "when did this arrive?" and "when was this true?" are different questions.
+/// A front-end shows it as "n ago" — a percentage with no date beside it looks
+/// equally current whether it was read a minute or an hour ago.
+///
 /// Wire type: `usage`.
 class Usage {
   const Usage({
@@ -1434,6 +1459,8 @@ class Usage {
     required this.weekly,
     required this.weeklyModel,
     this.weeklyModelName = '',
+    required this.memory,
+    this.readAt = '',
     this.err = '',
   });
 
@@ -1447,6 +1474,8 @@ class Usage {
   final UsageWindow weekly;
   final UsageWindow weeklyModel;
   final String weeklyModelName;
+  final UsageWindow memory;
+  final String readAt;
   final String err;
 
   factory Usage.fromJson(Map<String, Object?> j) => Usage(
@@ -1455,6 +1484,8 @@ class Usage {
         weekly: UsageWindow.fromJson(asObj(j['weekly'])),
         weeklyModel: UsageWindow.fromJson(asObj(j['weekly_model'])),
         weeklyModelName: asString(j['weekly_model_name']),
+        memory: UsageWindow.fromJson(asObj(j['memory'])),
+        readAt: asString(j['read_at']),
         err: asString(j['err']),
       );
 
@@ -1465,6 +1496,8 @@ class Usage {
         'weekly': weekly.toJson(),
         'weekly_model': weeklyModel.toJson(),
         if (weeklyModelName.isNotEmpty) 'weekly_model_name': weeklyModelName,
+        'memory': memory.toJson(),
+        if (readAt.isNotEmpty) 'read_at': readAt,
         if (err.isNotEmpty) 'err': err,
       };
 }
