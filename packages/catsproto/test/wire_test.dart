@@ -200,14 +200,62 @@ void main() {
     test('Usage keeps -1 distinct from 0', () {
       final usage = Usage.fromJson({
         't': MsgType.usage,
-        'source': 'local',
-        'five_hour': {'pct': kUsagePctUnknown, 'detail': '1.2M tokens'},
-        'weekly': {'pct': 43.5},
-        'weekly_model': {'pct': kUsagePctUnknown},
+        'groups': [
+          {
+            'id': 'claude',
+            'name': 'Claude',
+            'note': 'estimate · no claude credential',
+            'windows': [
+              {'name': '5 hr', 'pct': kUsagePctUnknown, 'detail': '1.2M tokens'},
+              {'name': 'Week', 'pct': 43.5},
+            ],
+          },
+        ],
       });
-      expect(usage.fiveHour.pct, kUsagePctUnknown);
-      expect(usage.weekly.pct, 43.5);
-      expect(usage.weeklyModelName, '');
+      final claude = usage.groups.single;
+      expect(claude.windows.first.pct, kUsagePctUnknown,
+          reason: 'a row counted locally has no allowance to divide by, and '
+              'must not read as a window that is 0% spent');
+      expect(claude.windows.last.pct, 43.5);
+      expect(claude.note, isNotEmpty);
+    });
+
+    test('Usage group ids are opaque except for host', () {
+      final usage = Usage.fromJson({
+        't': MsgType.usage,
+        'groups': [
+          {
+            'id': 'copilot',
+            'name': 'Copilot',
+            'windows': [
+              {'name': 'Week', 'pct': kUsagePctUnknown, 'detail': '8K tok out'},
+            ],
+          },
+          {
+            'id': 'host',
+            'name': 'Host',
+            'windows': [
+              {'name': 'Memory', 'pct': 80.7, 'detail': '12.9G/16.0G'},
+            ],
+          },
+        ],
+      });
+      // The order is the server's reading order and survives verbatim: the
+      // providers first, the machine itself last.
+      expect(usage.groups.map((g) => g.id), ['copilot', 'host']);
+      // "host" is the one id a client may branch on — the group cats
+      // synthesises rather than reads from a provider, and the one whose
+      // percentage wants the memory warning scale rather than a window's.
+      expect(usage.groups.last.windows.single.name, 'Memory');
+      // Every row is labelled by the server; nothing here enumerates providers
+      // or names their windows.
+      expect(usage.groups.first.windows.single.name, 'Week');
+      expect(usage.groups.first.note, isEmpty);
+    });
+
+    test('a usage message with no groups decodes as empty, not null', () {
+      final usage = Usage.fromJson({'t': MsgType.usage, 'read_at': ''});
+      expect(usage.groups, isEmpty);
     });
 
     test('a nullable pointer field stays null', () {
