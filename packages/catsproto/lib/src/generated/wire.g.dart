@@ -55,6 +55,7 @@ abstract final class MsgType {
   static const String agents = 'agents';
   static const String paneTitle = 'pane_title';
   static const String paneCwd = 'pane_cwd';
+  static const String paneBranch = 'pane_branch';
   static const String paneAgent = 'pane_agent';
   static const String paneModes = 'pane_modes';
   static const String paneExited = 'pane_exited';
@@ -87,6 +88,7 @@ abstract final class MsgType {
   static const String paste = 'paste';
   static const String image = 'image';
   static const String resize = 'resize';
+  static const String focus = 'focus';
   static const String raw = 'raw';
   static const String cmd = 'cmd';
 }
@@ -932,6 +934,36 @@ class ErrorMsg {
       };
 }
 
+/// Focus reports the client *window's* focus — the OS-level "is this app in
+/// front" state, not which pane is focused (that is a session command). The
+/// server folds every connection's report into one "is anyone looking" bit and
+/// forwards its transitions to pane programs that enabled focus reporting (DEC
+/// mode 1004), which is how a TUI knows to park its caret blink while the user
+/// is in another app. A client that never sends this is treated as focused,
+/// which is the world every program assumed before the message existed.
+///
+/// Wire type: `focus`.
+class Focus {
+  const Focus({
+    required this.focused,
+  });
+
+  /// The `t` discriminator this class always carries. It is a property of
+  /// the type, not a field: a caller who could set it could set it wrong.
+  static const String type = 'focus';
+
+  final bool focused;
+
+  factory Focus.fromJson(Map<String, Object?> j) => Focus(
+        focused: asBool(j['focused']),
+      );
+
+  Map<String, Object?> toJson() => {
+        't': type,
+        'focused': focused,
+      };
+}
+
 /// Image is a clipboard image paste (base64 on the wire).
 ///
 /// Wire type: `image`.
@@ -1258,6 +1290,42 @@ class PaneAgent {
         'state': state,
         if (model.isNotEmpty) 'model': model,
         'seen': seen,
+      };
+}
+
+/// PaneBranch reports the git branch checked out in a pane's working directory;
+/// "" clears it (the pane left the repo, or never was in one).
+///
+/// It rides its own message rather than a field on PaneCwd because the two move
+/// independently: a checkout in a pane that never cd's changes the branch with
+/// no cwd event behind it, and a cd within one repo changes the path with no
+/// branch change. Coupling them would mean re-sending the unchanged half on
+/// every update of the other, and — worse — would tie the branch's refresh
+/// cadence to OSC 7, which only fires when the shell moves.
+///
+/// Wire type: `pane_branch`.
+class PaneBranch {
+  const PaneBranch({
+    required this.pane,
+    required this.branch,
+  });
+
+  /// The `t` discriminator this class always carries. It is a property of
+  /// the type, not a field: a caller who could set it could set it wrong.
+  static const String type = 'pane_branch';
+
+  final int pane;
+  final String branch;
+
+  factory PaneBranch.fromJson(Map<String, Object?> j) => PaneBranch(
+        pane: asInt(j['pane']),
+        branch: asString(j['branch']),
+      );
+
+  Map<String, Object?> toJson() => {
+        't': type,
+        'pane': pane,
+        'branch': branch,
       };
 }
 
@@ -1983,6 +2051,8 @@ Object? decodeDown(Map<String, Object?> j) {
       return PaneTitle.fromJson(j);
     case PaneCwd.type:
       return PaneCwd.fromJson(j);
+    case PaneBranch.type:
+      return PaneBranch.fromJson(j);
     case PaneAgent.type:
       return PaneAgent.fromJson(j);
     case PaneModes.type:
@@ -2047,6 +2117,8 @@ Object? decodeUp(Map<String, Object?> j) {
     case Resize.type:
       // ignore: deprecated_member_use_from_same_package
       return Resize.fromJson(j);
+    case Focus.type:
+      return Focus.fromJson(j);
     case Raw.type:
       // ignore: deprecated_member_use_from_same_package
       return Raw.fromJson(j);
