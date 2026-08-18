@@ -220,7 +220,7 @@ void main() {
       expect(claude.note, isNotEmpty);
     });
 
-    test('Usage group ids are opaque except for host', () {
+    test('Usage group ids are opaque except for the host family', () {
       final usage = Usage.fromJson({
         't': MsgType.usage,
         'groups': [
@@ -238,15 +238,33 @@ void main() {
               {'name': 'Memory', 'pct': 80.7, 'detail': '12.9G/16.0G'},
             ],
           },
+          {
+            'id': 'host:devbox',
+            'name': 'devbox',
+            'windows': [
+              {'name': 'Memory', 'pct': 87.0, 'detail': '13.9G/16.0G'},
+            ],
+          },
         ],
       });
       // The order is the server's reading order and survives verbatim: the
-      // providers first, the machine itself last.
-      expect(usage.groups.map((g) => g.id), ['copilot', 'host']);
-      // "host" is the one id a client may branch on — the group cats
-      // synthesises rather than reads from a provider, and the one whose
-      // percentage wants the memory warning scale rather than a window's.
-      expect(usage.groups.last.windows.single.name, 'Memory');
+      // providers first, then this machine, then every remote cathost that
+      // reported, in roster order.
+      expect(usage.groups.map((g) => g.id), ['copilot', 'host', 'host:devbox']);
+      // The host FAMILY is what a client may branch on, and it is a family
+      // rather than one id: "host" is the machine serving the UI, "host:<id>"
+      // is a cathost reporting its own box. Same row names, same scales — the
+      // prefix only says the numbers describe somewhere else. A client that
+      // matched the literal "host" would give a remote machine's memory the
+      // rate-limit warning scale, which is calm where it should not be.
+      bool isHost(String id) => id == 'host' || id.startsWith('host:');
+      expect(usage.groups.where((g) => isHost(g.id)).length, 2);
+      for (final g in usage.groups.where((g) => isHost(g.id))) {
+        expect(g.windows.single.name, 'Memory');
+      }
+      // The name is the label to print; only the id is structured. A remote
+      // group is named for the host, not "Host".
+      expect(usage.groups.last.name, 'devbox');
       // Every row is labelled by the server; nothing here enumerates providers
       // or names their windows.
       expect(usage.groups.first.windows.single.name, 'Week');

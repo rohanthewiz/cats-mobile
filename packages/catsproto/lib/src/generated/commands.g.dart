@@ -141,6 +141,10 @@ abstract final class CmdName {
 
   static const String pathList = 'path.list';
 
+  static const String hostAttach = 'host.attach';
+
+  static const String hostDetach = 'host.detach';
+
   static const String sessionGet = 'session.get';
 
   static const String workspaceList = 'workspace.list';
@@ -471,6 +475,88 @@ class DirParams {
       };
 }
 
+/// HostAttachParams: host.attach — one cathost, in the same shape config.yaml's
+/// hosts: entries use (config.Host), because the command's other half is writing
+/// exactly that entry to the file. A client that can describe a host in the
+/// config can describe one here with the same keys.
+///
+/// Addr is scheme://target — unix://path, tcp://host:port (loopback only), or
+/// tls://host:port. Token/TokenFile authenticate to a cathost started with
+/// -token-file, and Fingerprint pins its self-signed certificate; TokenFile is
+/// the better of the pair, since a literal token is written into the config file
+/// verbatim.
+class HostAttachParams {
+  const HostAttachParams({
+    required this.id,
+    this.label = '',
+    required this.addr,
+    this.token = '',
+    this.tokenFile = '',
+    this.fingerprint = '',
+    this.isDefault = false,
+  });
+
+  final String id;
+  final String label;
+  final String addr;
+  final String token;
+  final String tokenFile;
+  final String fingerprint;
+
+  /// Default makes the new host the one unqualified panes land on. It is
+  /// "is_default" on the wire for the same reason HostInfo.Default is: `default`
+  /// is a reserved word in the generated Dart client.
+  final bool isDefault;
+
+  factory HostAttachParams.fromJson(Map<String, Object?> j) => HostAttachParams(
+        id: asString(j['id']),
+        label: asString(j['label']),
+        addr: asString(j['addr']),
+        token: asString(j['token']),
+        tokenFile: asString(j['token_file']),
+        fingerprint: asString(j['fingerprint']),
+        isDefault: asBool(j['is_default']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        if (label.isNotEmpty) 'label': label,
+        'addr': addr,
+        if (token.isNotEmpty) 'token': token,
+        if (tokenFile.isNotEmpty) 'token_file': tokenFile,
+        if (fingerprint.isNotEmpty) 'fingerprint': fingerprint,
+        if (isDefault) 'is_default': isDefault,
+      };
+}
+
+/// HostDetachParams: host.detach — drop a cathost from the running session and
+/// from the config's hosts: block.
+///
+/// A host holding panes is refused unless Force, because detaching it abandons
+/// those terminals: the command cannot move a running process between machines,
+/// so Force re-homes the panes onto the default host, where they respawn as
+/// fresh shells. The refusal is the default so that "detach" never silently
+/// costs somebody a working session.
+class HostDetachParams {
+  const HostDetachParams({
+    required this.id,
+    this.force = false,
+  });
+
+  final String id;
+  final bool force;
+
+  factory HostDetachParams.fromJson(Map<String, Object?> j) => HostDetachParams(
+        id: asString(j['id']),
+        force: asBool(j['force']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        if (force) 'force': force,
+      };
+}
+
 /// HostInfo describes one cathost for host.list — the machines the session's
 /// panes are spread over. A single-host session answers with one entry, which is
 /// how a client tells "hosts aren't configured here" from "the remote one is
@@ -491,6 +577,8 @@ class HostInfo {
     this.local = false,
     required this.panes,
     this.error = '',
+    this.latencyMs = 0,
+    this.listsDirs = false,
   });
 
   final String id;
@@ -516,6 +604,27 @@ class HostInfo {
   final int panes;
   final String error;
 
+  /// LatencyMs is the last measured round trip to this cathost, in
+  /// milliseconds; omitted when unknown — never measured, not connected, or a
+  /// daemon too old to answer a ping (see orchestration.FeaturePing).
+  ///
+  /// Fractional on purpose. The local host is the common case and a unix-socket
+  /// round trip is a fraction of a millisecond, so whole milliseconds would
+  /// report every healthy session as "0" — a number that reads as broken rather
+  /// than as instant.
+  final double latencyMs;
+
+  /// ListsDirs reports that path.list can complete a path on this host: always
+  /// true for the local machine, and true for a remote one whose cathost speaks
+  /// the list_dir capability.
+  ///
+  /// It is a separate flag from Local because the two used to be the same
+  /// answer and are not any more. A client gates its start-path picker on this:
+  /// with it, the picker works against the remote filesystem; without it, the
+  /// field takes a typed path that this session cannot verify, and saying so
+  /// beats offering a picker full of the wrong machine's directories.
+  final bool listsDirs;
+
   factory HostInfo.fromJson(Map<String, Object?> j) => HostInfo(
         id: asString(j['id']),
         label: asString(j['label']),
@@ -525,6 +634,8 @@ class HostInfo {
         local: asBool(j['local']),
         panes: asInt(j['panes']),
         error: asString(j['error']),
+        latencyMs: asDouble(j['latency_ms']),
+        listsDirs: asBool(j['lists_dirs']),
       );
 
   Map<String, Object?> toJson() => {
@@ -536,6 +647,8 @@ class HostInfo {
         if (local) 'local': local,
         'panes': panes,
         if (error.isNotEmpty) 'error': error,
+        if (latencyMs != 0) 'latency_ms': latencyMs,
+        if (listsDirs) 'lists_dirs': listsDirs,
       };
 }
 
@@ -861,27 +974,43 @@ class PaneParams {
 ///
 /// Recents asks for the frecency list too. A picker wants it once when it opens,
 /// not on every keystroke of directory navigation, so it is opt-in per request.
+///
+/// Host names the machine to list on, overriding the anchor pane's. It exists
+/// because the picker in the new-workspace dialog chooses a host BEFORE anything
+/// exists there: with only a pane to go by, a path being typed for devbox would
+/// be completed against the local disk and every suggestion would be a directory
+/// that does not exist where the workspace is about to be created. "" keeps the
+/// anchor pane's host, which is what every other caller wants.
+///
+/// A path is only ever completed by the machine that owns it. When Host is a
+/// remote cathost the listing is taken there — "~" is that user's home, "." is a
+/// directory only that kernel can resolve — and a host whose cathost is too old
+/// to list answers with an Error rather than with this machine's directories.
 class PathListParams {
   const PathListParams({
     this.dir = '',
     this.pane,
     this.recents = false,
+    this.host = '',
   });
 
   final String dir;
   final int? pane;
   final bool recents;
+  final String host;
 
   factory PathListParams.fromJson(Map<String, Object?> j) => PathListParams(
         dir: asString(j['dir']),
         pane: asIntOrNull(j['pane']),
         recents: asBool(j['recents']),
+        host: asString(j['host']),
       );
 
   Map<String, Object?> toJson() => {
         if (dir.isNotEmpty) 'dir': dir,
         if (pane != null) 'pane': pane,
         if (recents) 'recents': recents,
+        if (host.isNotEmpty) 'host': host,
       };
 }
 
@@ -1343,12 +1472,16 @@ class SessionInfoResult {
 ///   - Env adds environment variables to the spawned process.
 ///
 /// Cwd/Env without Command still apply to the default shell spawn.
-/// Host puts the new pane on a named cathost instead of the workspace's own
-/// default (host.list names them). It is the one field that decides which
-/// *machine* the spawn lands on, so everything else here — Cwd especially — is
-/// interpreted on that machine: a cwd from the pane being split means nothing on
-/// another host, which is why the inherited cwd is dropped when the split
-/// crosses hosts (Dispatcher.inheritedSplitCwd).
+/// Host puts the new pane on a named cathost (host.list names them) instead of
+/// where it would otherwise go, which for a split is the machine of the pane
+/// being split — not the workspace's default. "Beside this pane" is what a split
+/// means, and a guest pane's split belongs next to it; the workspace's host is a
+/// policy for new *tabs* and workspaces, which have no neighbouring pane to
+/// answer the question. Host is the one field that decides which *machine* the
+/// spawn lands on, so everything else here — Cwd especially — is interpreted on
+/// that machine: a cwd from the pane being split means nothing on another host,
+/// which is why the inherited cwd is dropped when the split crosses hosts
+/// (Dispatcher.inheritedSplitCwd).
 class SplitParams {
   const SplitParams({
     this.pane,
@@ -2251,6 +2384,8 @@ const List<CommandSpec> kCommandSpecs = <CommandSpec>[
   CommandSpec('plugin.list', replyRequired: true),
   CommandSpec('plugin.uninstall', paramsRequired: true),
   CommandSpec('path.list', replyRequired: true),
+  CommandSpec('host.attach', paramsRequired: true),
+  CommandSpec('host.detach', paramsRequired: true),
   CommandSpec('session.get'),
   CommandSpec('workspace.list'),
   CommandSpec('tab.list'),
@@ -2541,6 +2676,14 @@ mixin CatsCommands implements CatsCommandTransport {
   /// This method always correlates, so it always runs.
   Future<PathListResult> pathList([PathListParams? params]) async =>
       PathListResult.fromJson(asObj(await invoke(CmdName.pathList, params?.toJson())));
+
+  /// `host.attach`
+  Future<HostListResult> hostAttach(HostAttachParams params) async =>
+      HostListResult.fromJson(asObj(await invoke(CmdName.hostAttach, params.toJson())));
+
+  /// `host.detach`
+  Future<HostListResult> hostDetach(HostDetachParams params) async =>
+      HostListResult.fromJson(asObj(await invoke(CmdName.hostDetach, params.toJson())));
 
   /// `session.get`
   Future<SessionInfoResult> sessionGet() async =>
