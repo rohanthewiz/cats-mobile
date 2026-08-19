@@ -117,6 +117,97 @@ class CatsSession {
     }
   }
 
+  // --- windows -----------------------------------------------------------
+  //
+  // A connection is a VIEW, not a mirror: each desktop window shows one
+  // workspace, and a viewer follows the primary view — whichever desktop
+  // window the user touched last. Two questions follow from that, and the
+  // phone is the client that most needs both answered on screen:
+  //
+  //   "whose window am I looking through?"  -> [viewWorkspace], [followedWindow]
+  //   "what else could I look through?"     -> [desktopWindows]
+  //
+  // Both are folds of what the server already sends. The `clients` census
+  // carries one entry per connection with the workspace it RESOLVED to, and
+  // the `layout` this connection receives is built for its own view — so the
+  // active flag in it is the server's own answer to "what am I showing",
+  // rather than something reconstructed here from a pin that may have gone
+  // stale. Deriving it twice is how a client ends up disagreeing with the
+  // server about what is on its own screen.
+
+  /// The workspace this connection is being shown, per the server.
+  ///
+  /// Read off the layout's active flag rather than from any local pin: a pin
+  /// naming a workspace that has since been closed falls back server-side, and
+  /// a viewer with no pin at all resolves to a workspace it never named.
+  /// Empty until the first layout arrives.
+  String get viewWorkspace {
+    for (final w in layout?.workspaces ?? const <WorkspaceInfo>[]) {
+      if (w.active) return w.id;
+    }
+    return '';
+  }
+
+  /// The desktop windows currently connected, in census order.
+  ///
+  /// Viewers are left out: another phone is not something this one can look
+  /// through. A window's [DesktopWindow.followed] is workspace equality, not
+  /// connection identity — the census gives connections no ids, and two windows
+  /// on one workspace mirror anyway, so "following that window" honestly means
+  /// "showing what it shows".
+  List<DesktopWindow> get desktopWindows {
+    final names = {
+      for (final w in layout?.workspaces ?? const <WorkspaceInfo>[])
+        w.id: w.name,
+    };
+    final showing = viewWorkspace;
+    return [
+      for (final v in clients?.views ?? const <ClientView>[])
+        if (!v.viewer)
+          DesktopWindow(
+            workspaceId: v.workspace,
+            // Empty when the layout has not named it. That happens legitimately
+            // — a census can arrive before the first layout — so a UI shows the
+            // id rather than treating it as an error.
+            workspaceName: names[v.workspace] ?? '',
+            cols: v.cols,
+            rows: v.rows,
+            focused: v.focused,
+            primary: v.primary,
+            followed: v.workspace.isNotEmpty && v.workspace == showing,
+          ),
+    ];
+  }
+
+  /// The window this connection is currently looking through, or null when the
+  /// census has not arrived or no desktop window shows this workspace (the
+  /// desktop quit and left the session running, say).
+  DesktopWindow? get followedWindow {
+    for (final w in desktopWindows) {
+      if (w.followed) return w;
+    }
+    return null;
+  }
+
+  /// The primary view — the desktop window every view-less caller and every
+  /// unpinned viewer resolves through. Null before the first census.
+  DesktopWindow? get primaryWindow {
+    for (final w in desktopWindows) {
+      if (w.primary) return w;
+    }
+    return null;
+  }
+
+  /// How many connections are viewers (phones, tablets), this one included.
+  /// `clients.total - clients.sizers` says the same thing without needing
+  /// [Clients.views]; this reads it off the views when they are there.
+  int get viewerCount {
+    final c = clients;
+    if (c == null) return 0;
+    if (c.views.isEmpty) return c.total - c.sizers;
+    return c.views.where((v) => v.viewer).length;
+  }
+
   PaneGrid gridFor(int pane) => grids.putIfAbsent(pane, () => PaneGrid(pane));
 
   /// Discards every grid. Call on a NEW socket, before the first message.
@@ -163,4 +254,48 @@ class CatsSession {
     if (!item.seen && item.state != AgentState.blocked) return 2;
     return rank[item.state] ?? 4;
   }
+}
+
+/// One desktop window, as a phone sees it: the census entry joined to the name
+/// the layout gives its workspace.
+///
+/// It is deliberately a window and not a workspace. A workspace with no window
+/// on it is still running and still in the sidebar, but it is not something to
+/// "follow" — following means seeing what somebody at the desk is seeing.
+class DesktopWindow {
+  const DesktopWindow({
+    required this.workspaceId,
+    required this.workspaceName,
+    required this.cols,
+    required this.rows,
+    required this.focused,
+    required this.primary,
+    required this.followed,
+  });
+
+  /// The workspace this window is showing, resolved by the server (a window on
+  /// a closed workspace reports the one it fell back to, not the stale id).
+  final String workspaceId;
+
+  /// The workspace's display name, or '' when no layout has named it yet.
+  final String workspaceName;
+
+  /// The window's grid in cells — what its panes are laid out against. Useful
+  /// as a label ("200x60") when two windows sit on the same workspace and the
+  /// name alone cannot tell them apart.
+  final int cols;
+  final int rows;
+
+  /// Its OS window is in the foreground.
+  final bool focused;
+
+  /// It is the primary view: the most recently focused desktop window, which is
+  /// what an unpinned viewer follows and what catctl acts on.
+  final bool primary;
+
+  /// This connection is currently showing this window's workspace.
+  final bool followed;
+
+  /// A label that stays useful before the first layout arrives.
+  String get label => workspaceName.isNotEmpty ? workspaceName : workspaceId;
 }

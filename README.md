@@ -43,6 +43,19 @@ Anything that *would* move the desktop's viewport — `agent.focus`, `tab.focus`
 `pane.zoom` — stays behind an explicit confirmed gesture, never a side effect of
 navigating the app.
 
+`workspace.focus` used to belong on that list and no longer does. On a server
+advertising the `window` capability a connection is a **view**: the command
+moves only the connection that sent it, so picking which desktop window to watch
+disturbs nobody. `CatsConnection.followWorkspace` pins one,
+`followPrimaryView` lets go again (an empty id), and `Init.workspace` carries
+the pin through a reconnect. All three check the capability first — on an older
+server the same command is still a session-wide switch, and sending it there is
+the one bug in the phone that would rearrange somebody's desk. Which window the
+phone is *actually* looking through comes from the server, not from the pin:
+`CatsSession.viewWorkspace` reads the layout's own active flag, because a pinned
+workspace can be closed at the desk and the server falls back silently when it
+is.
+
 ## Keeping Dart in lockstep with Go
 
 Everything under `packages/catsproto/lib/src/generated/` comes from

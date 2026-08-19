@@ -116,7 +116,8 @@ class ViewerModeViolation implements Exception {
 /// stop that, and this class is two of them:
 ///
 ///   1. [_handshake] builds the `Init` itself, with hardcoded zeros and
-///      `viewer: true`. App code has no way to supply one.
+///      `viewer: true`. App code has no way to supply one — except the
+///      workspace it wants to look through, which says nothing about size.
 ///   2. [send] refuses `Resize` outright.
 ///   3. the generator marks `Resize` `@Deprecated`, and analysis_options.yaml
 ///      promotes `deprecated_member_use` to an error.
@@ -124,13 +125,21 @@ class ViewerModeViolation implements Exception {
 ///
 /// Belt and braces is warranted here because it is the one failure mode where a
 /// bug in the phone breaks the user's desktop.
+///
+/// [followWorkspace] adds a fifth of the same kind for the same reason: it
+/// refuses to send `workspace.focus` unless the server advertises
+/// [Caps.window]. With that capability the command moves only this connection's
+/// view; without it, it is the old session-wide switch and would drag every
+/// window at the desk along.
 class CatsConnection with CatsCommands implements CatsCommandTransport {
   CatsConnection({
     required this.endpoint,
     required CatsSocket socket,
     this.defaultTimeout = const Duration(seconds: 30),
     this.maxTimeout = const Duration(minutes: 10),
-  }) : _socket = socket {
+    String workspace = '',
+  }) : _socket = socket,
+       _pinnedWorkspace = workspace {
     _subscription = _socket.messages.listen(
       _onText,
       onError: (Object e) => _fail(e),
@@ -186,7 +195,15 @@ class CatsConnection with CatsCommands implements CatsCommandTransport {
     // are 0 — two separate guards, both of which a viewer must clear. Sending
     // `viewer: true` as well is belt and braces against a server that honours
     // one and forgets the other.
-    const init = Init(
+    //
+    // `workspace` is the one field the app gets to fill in, and it is not a
+    // hole in the rule above: a workspace is which window this connection looks
+    // THROUGH, not a claim about its size. Empty — the default — is "follow the
+    // primary view", which is what a phone that has not picked a window wants.
+    // It rides the handshake rather than a command afterwards so a reconnect
+    // comes back on the same window instead of flicking to the desk's for a
+    // frame; see [followWorkspace] for the live half.
+    final init = Init(
       v: kProtocolVersion,
       cols: 0,
       rows: 0,
@@ -194,8 +211,80 @@ class CatsConnection with CatsCommands implements CatsCommandTransport {
       cellWPx: 0,
       cellHPx: 0,
       viewer: true,
+      workspace: _pinnedWorkspace,
     );
     _socket.send(jsonEncode(init.toJson()));
+  }
+
+  // --- which window this connection looks through -----------------------------
+  //
+  // A connection is a view. A desktop window pins its workspace with `?ws=`;
+  // this client pins it in the handshake and can move it afterwards. The state
+  // is here rather than in CatsSession because it is a fact about the SOCKET —
+  // it dies with it, and the app hands it to the next CatsConnection to have a
+  // reconnect land on the same window.
+  //
+  // What the server is showing is a different question, and the session answers
+  // that one (CatsSession.viewWorkspace) from the layout it actually received.
+  // A pin can be stale — the workspace it named can be closed from the desk —
+  // and the server falls back silently when it is, so a UI that reports the pin
+  // as "what you are watching" would be lying at exactly the wrong moment.
+
+  /// The workspace this connection asked to be pinned to, or '' when it is
+  /// following the primary view — whichever desktop window was touched last.
+  String get pinnedWorkspace => _pinnedWorkspace;
+  String _pinnedWorkspace;
+
+  /// Whether this connection is following the primary view rather than holding
+  /// one window.
+  bool get followsPrimaryView => _pinnedWorkspace.isEmpty;
+
+  /// Pins this connection to one desktop window's workspace.
+  ///
+  /// This is a viewer-safe command and the fifth layer of the class doc's
+  /// guard is what makes it one. On a server advertising [Caps.window],
+  /// `workspace.focus` moves ONLY the connection that sent it — nothing at the
+  /// desk changes, which is why picking a window to watch does not need the
+  /// "explicit confirmed gesture" that `agent.focus` or `pane.zoom` does. On a
+  /// server WITHOUT that capability the same command is a session mutation and
+  /// would switch every window at the desk, so it is refused here rather than
+  /// sent and hoped about — the one failure mode where a bug in the phone
+  /// rearranges somebody's desktop.
+  ///
+  /// Awaits [welcome] first: the capability set is not known before it, and an
+  /// empty set is a real answer ("honours none") that must not be read as a
+  /// refusal on a server that simply has not replied yet.
+  Future<void> followWorkspace(String workspaceId) async {
+    await _requireWindowCap('workspace.focus');
+    await workspaceFocus(WorkspaceParams(id: workspaceId));
+    // Only after the server said ok: a pin the server rejected (an id closed
+    // between the census and the tap) must not survive into the next
+    // handshake, where it would be silently fallen back a second time.
+    _pinnedWorkspace = workspaceId;
+  }
+
+  /// Releases the pin: this connection follows the primary view again.
+  ///
+  /// The return leg of [followWorkspace] — an empty id is "follow the primary",
+  /// the state [Init.workspace] leaves a connection in by being absent. A
+  /// server too old to know it answers `ok: false` and the pin stands, which is
+  /// a detectable no rather than a silent one.
+  Future<void> followPrimaryView() async {
+    await _requireWindowCap('workspace.focus');
+    await workspaceFocus(const WorkspaceParams(id: ''));
+    _pinnedWorkspace = '';
+  }
+
+  Future<void> _requireWindowCap(String what) async {
+    await welcome;
+    if (!_caps.contains(Caps.window)) {
+      // Phrased to complete ViewerModeViolation's own sentence, which already
+      // ends "— it would reshape the desktop it is looking at".
+      throw ViewerModeViolation(
+        '$what to a server that does not advertise "${Caps.window}", where it '
+        'is a session-wide switch',
+      );
+    }
   }
 
   /// Sends one up-message.
