@@ -21,6 +21,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'codec.g.dart';
+import 'wire.g.dart';
 
 // ignore_for_file: unused_import
 
@@ -140,6 +141,18 @@ abstract final class CmdName {
   static const String pluginUninstall = 'plugin.uninstall';
 
   static const String pathList = 'path.list';
+
+  static const String uiNotify = 'ui.notify';
+
+  static const String uiAction = 'ui.action';
+
+  static const String paneOpenFile = 'pane.open_file';
+
+  static const String ledgerList = 'ledger.list';
+
+  static const String ledgerOutput = 'ledger.output';
+
+  static const String ledgerJump = 'ledger.jump';
 
   static const String hostAttach = 'host.attach';
 
@@ -669,6 +682,135 @@ class HostListResult {
       };
 }
 
+/// LedgerBlockParams addresses one recorded command's block: ledger.output and
+/// ledger.jump. Both fields are required — a block id is allocated by the pane's
+/// own cathost, so it means nothing without the pane.
+class LedgerBlockParams {
+  const LedgerBlockParams({
+    required this.pane,
+    required this.block,
+  });
+
+  final int pane;
+  final int block;
+
+  factory LedgerBlockParams.fromJson(Map<String, Object?> j) => LedgerBlockParams(
+        pane: asInt(j['pane']),
+        block: asInt(j['block']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'pane': pane,
+        'block': block,
+      };
+}
+
+/// LedgerListParams filters the command history. Every field is optional and
+/// they AND together; the answer is newest first.
+///
+/// Contains is a plain case-insensitive substring rather than a regexp or a fuzzy
+/// match, and that is the same division path.list draws: the interesting matching
+/// belongs to the caller — a palette wants the recent list and will rank it
+/// itself — and a server-side ranking would have to be re-implemented in every
+/// front end that disagreed with it.
+class LedgerListParams {
+  const LedgerListParams({
+    this.host = '',
+    this.pane = 0,
+    this.cwd = '',
+    this.contains = '',
+    this.failed = false,
+    this.limit = 0,
+  });
+
+  final String host;
+  final int pane;
+  final String cwd;
+  final String contains;
+
+  /// Failed narrows to commands that are KNOWN to have failed. A command whose
+  /// shell reported no status is not one of them: "finished, status unknown" is
+  /// true, and counting it as a failure would make this filter lie in exactly
+  /// the case somebody is using it to investigate.
+  final bool failed;
+  final int limit;
+
+  factory LedgerListParams.fromJson(Map<String, Object?> j) => LedgerListParams(
+        host: asString(j['host']),
+        pane: asInt(j['pane']),
+        cwd: asString(j['cwd']),
+        contains: asString(j['contains']),
+        failed: asBool(j['failed']),
+        limit: asInt(j['limit']),
+      );
+
+  Map<String, Object?> toJson() => {
+        if (host.isNotEmpty) 'host': host,
+        if (pane != 0) 'pane': pane,
+        if (cwd.isNotEmpty) 'cwd': cwd,
+        if (contains.isNotEmpty) 'contains': contains,
+        if (failed) 'failed': failed,
+        if (limit != 0) 'limit': limit,
+      };
+}
+
+/// LedgerListResult is CmdResult.Data for ledger.list.
+class LedgerListResult {
+  const LedgerListResult({
+    required this.entries,
+  });
+
+  final List<LedgerEntry> entries;
+
+  factory LedgerListResult.fromJson(Map<String, Object?> j) => LedgerListResult(
+        entries: asList(j['entries'], (e) => LedgerEntry.fromJson(asObj(e))),
+      );
+
+  Map<String, Object?> toJson() => {
+        'entries': [for (final e in entries) e.toJson()],
+      };
+}
+
+/// LedgerOutputResult is CmdResult.Data for ledger.output.
+///
+/// Found false is the ordinary answer for a block whose rows have been discarded
+/// — a pane's scrollback is finite, and a command from an hour ago is usually
+/// gone. It is a state, not a failure, which is why it is a field rather than an
+/// error: a caller walking a history wants to know which entries are still
+/// readable, not to have the walk stop.
+class LedgerOutputResult {
+  const LedgerOutputResult({
+    required this.found,
+    this.text = '',
+    this.startRow = 0,
+    this.endRow = 0,
+  });
+
+  final bool found;
+  final String text;
+
+  /// StartRow/EndRow are screen-buffer rows AT THE MOMENT OF THE ANSWER, which
+  /// is the only moment they mean anything: the marks behind them move as the
+  /// buffer shifts. Reported so a caller that wants to draw or scroll to the
+  /// block does not need a second round trip against a buffer that has moved.
+  final int startRow;
+  final int endRow;
+
+  factory LedgerOutputResult.fromJson(Map<String, Object?> j) => LedgerOutputResult(
+        found: asBool(j['found']),
+        text: asString(j['text']),
+        startRow: asInt(j['start_row']),
+        endRow: asInt(j['end_row']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'found': found,
+        if (text.isNotEmpty) 'text': text,
+        if (startRow != 0) 'start_row': startRow,
+        if (endRow != 0) 'end_row': endRow,
+      };
+}
+
 /// LockWorkspaceParams: workspace.lock — set (or clear, with Locked false) a
 /// workspace's automation lock. ID "" means the active workspace, the same
 /// default workspace.close takes, so a key binding or `catctl lock-ws` can send
@@ -741,6 +883,101 @@ class MoveWorkspaceParams {
   Map<String, Object?> toJson() => {
         'id': id,
         'index': index,
+      };
+}
+
+/// OpenFileParams: pane.open_file.
+///
+/// Path is NOT expanded or resolved here, for the reason every other path in
+/// this vocabulary travels raw since the multi-host slice: it names a file on
+/// the machine the editor is on. "~" is that user's home and a relative path is
+/// relative to that editor's own root, neither of which this side can answer
+/// about a disk it may not be able to see.
+///
+/// Pane is the ANCHOR — where the request came from, usually the pane whose
+/// output the path was clicked in. It decides three things: which host the file
+/// is on, which tab and workspace to look for an editor in first, and where a
+/// freshly spawned editor is split. Nil means the focused pane, the same
+/// neighbour rule new tabs and splits use.
+///
+/// Editor names an editor pane explicitly, skipping resolution. Use it when the
+/// caller already knows (an editor asking cats to open a file beside itself);
+/// leave it out and cats finds one.
+///
+/// Host overrides the anchor's machine. It exists for the same reason
+/// PathListParams.Host does — a caller may be naming a file on a machine no
+/// current pane is anchored to — and the editor found must be on it, because a
+/// path is only half an identity: the same string on two machines is two files.
+class OpenFileParams {
+  const OpenFileParams({
+    required this.path,
+    this.line = 0,
+    this.column = 0,
+    this.pane,
+    this.editor,
+    this.host = '',
+    this.spawn,
+  });
+
+  final String path;
+  final int line;
+  final int column;
+  final int? pane;
+  final int? editor;
+  final String host;
+
+  /// Spawn allows starting an editor when none is running. Nil means the
+  /// configured default (editor.spawn, on). Set it false for a caller that
+  /// wants "reveal it if the editor is open" and nothing more — a linter
+  /// walking twenty findings should not open twenty editors.
+  final bool? spawn;
+
+  factory OpenFileParams.fromJson(Map<String, Object?> j) => OpenFileParams(
+        path: asString(j['path']),
+        line: asInt(j['line']),
+        column: asInt(j['column']),
+        pane: asIntOrNull(j['pane']),
+        editor: asIntOrNull(j['editor']),
+        host: asString(j['host']),
+        spawn: asBoolOrNull(j['spawn']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'path': path,
+        if (line != 0) 'line': line,
+        if (column != 0) 'column': column,
+        if (pane != null) 'pane': pane,
+        if (editor != null) 'editor': editor,
+        if (host.isNotEmpty) 'host': host,
+        if (spawn != null) 'spawn': spawn,
+      };
+}
+
+/// OpenFileResult is CmdResult.Data for pane.open_file: which pane was asked,
+/// and whether it had to be started. Spawned is worth reporting rather than
+/// inferring, because a spawned editor opens the file from its ARGV and has not
+/// seen the line number — see the CmdPaneOpenFile comment.
+class OpenFileResult {
+  const OpenFileResult({
+    required this.pane,
+    required this.host,
+    this.spawned = false,
+  });
+
+  final int pane;
+  final String host;
+  final bool spawned;
+
+  factory OpenFileResult.fromJson(Map<String, Object?> j) => OpenFileResult(
+        pane: asInt(j['pane']),
+        host: asString(j['host']),
+        spawned: asBool(j['spawned']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'pane': pane,
+        'host': host,
+        if (spawned) 'spawned': spawned,
       };
 }
 
@@ -1877,6 +2114,97 @@ class ThemeSaveParams {
       };
 }
 
+/// UIActionParams: ui.action — take action Action on notification ID.
+///
+/// A notification is answered ONCE. The registry drops it on the first
+/// successful action, so a prompt cannot be answered twice by a browser toast
+/// and a phone that both showed the same buttons, and a second tap is refused
+/// by name rather than silently re-sending "yes" into a shell that has since
+/// moved on.
+class UIActionParams {
+  const UIActionParams({
+    required this.id,
+    required this.action,
+  });
+
+  final String id;
+  final String action;
+
+  factory UIActionParams.fromJson(Map<String, Object?> j) => UIActionParams(
+        id: asString(j['id']),
+        action: asString(j['action']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'action': action,
+      };
+}
+
+/// UINotifyParams: ui.notify.
+///
+/// Kind decides who hears about it, and the three values are the browser's
+/// existing notify kinds plus "info". "info" is new here and is deliberately
+/// NOT in the default push.kinds: a plugin that narrates its own progress must
+/// not be able to start vibrating a phone merely by existing, and an operator
+/// who wants that adds one word to the config.
+///
+/// Pane attributes the notification to a pane — the deep link a tap follows,
+/// the client-side "is it already on screen" suppression, and the default
+/// target of an action's Send. Omitting it yields a session-level notification,
+/// which is right for "the nightly build finished" and wrong for anything a
+/// button could answer.
+class UINotifyParams {
+  const UINotifyParams({
+    required this.title,
+    this.body = '',
+    this.kind = '',
+    this.pane,
+    this.actions = const <NotifyAction>[],
+  });
+
+  final String title;
+  final String body;
+
+  /// attention | finished | info (default info)
+  final String kind;
+  final int? pane;
+  final List<NotifyAction> actions;
+
+  factory UINotifyParams.fromJson(Map<String, Object?> j) => UINotifyParams(
+        title: asString(j['title']),
+        body: asString(j['body']),
+        kind: asString(j['kind']),
+        pane: asIntOrNull(j['pane']),
+        actions: asList(j['actions'], (e) => NotifyAction.fromJson(asObj(e))),
+      );
+
+  Map<String, Object?> toJson() => {
+        'title': title,
+        if (body.isNotEmpty) 'body': body,
+        if (kind.isNotEmpty) 'kind': kind,
+        if (pane != null) 'pane': pane,
+        if (actions.isNotEmpty) 'actions': [for (final e in actions) e.toJson()],
+      };
+}
+
+/// UINotifyResult is CmdResult.Data for ui.notify: the id ui.action answers by.
+class UINotifyResult {
+  const UINotifyResult({
+    required this.id,
+  });
+
+  final String id;
+
+  factory UINotifyResult.fromJson(Map<String, Object?> j) => UINotifyResult(
+        id: asString(j['id']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+      };
+}
+
 /// WaitForOutputParams: pane.wait_for_output — block until the pane's output
 /// matches Pattern (a substring, or a regexp when Regex is set), or until TimeoutMs
 /// elapses. Unlike read/capture (one round-trip), this rides the unary envelope but
@@ -2215,25 +2543,34 @@ class WorktreeListParams {
 }
 
 /// WorktreeListResult is CmdResult.Data for worktree.list. WorktreeRoot is the
-/// configured (tilde-expanded) directory new checkouts land under, so the
-/// new-worktree dialog can preview the derived checkout path client-side.
+/// directory new checkouts land under, tilde-expanded by the machine that will
+/// hold them, so the new-worktree dialog can preview the derived checkout path
+/// client-side.
+///
+/// Host is the machine the whole answer describes — every path in it is a path
+/// on that filesystem. The dialogs name it when the session has more than one
+/// host, because "new worktree — cats" is otherwise the same sentence whichever
+/// machine's repository is about to grow a checkout.
 class WorktreeListResult {
   const WorktreeListResult({
     required this.repoRoot,
     required this.repoName,
     required this.worktreeRoot,
+    this.host = '',
     required this.worktrees,
   });
 
   final String repoRoot;
   final String repoName;
   final String worktreeRoot;
+  final String host;
   final List<WorktreeInfo> worktrees;
 
   factory WorktreeListResult.fromJson(Map<String, Object?> j) => WorktreeListResult(
         repoRoot: asString(j['repo_root']),
         repoName: asString(j['repo_name']),
         worktreeRoot: asString(j['worktree_root']),
+        host: asString(j['host']),
         worktrees: asList(j['worktrees'], (e) => WorktreeInfo.fromJson(asObj(e))),
       );
 
@@ -2241,6 +2578,7 @@ class WorktreeListResult {
         'repo_root': repoRoot,
         'repo_name': repoName,
         'worktree_root': worktreeRoot,
+        if (host.isNotEmpty) 'host': host,
         'worktrees': [for (final e in worktrees) e.toJson()],
       };
 }
@@ -2384,6 +2722,12 @@ const List<CommandSpec> kCommandSpecs = <CommandSpec>[
   CommandSpec('plugin.list', replyRequired: true),
   CommandSpec('plugin.uninstall', paramsRequired: true),
   CommandSpec('path.list', replyRequired: true),
+  CommandSpec('ui.notify', paramsRequired: true),
+  CommandSpec('ui.action', paramsRequired: true),
+  CommandSpec('pane.open_file', paramsRequired: true),
+  CommandSpec('ledger.list', replyRequired: true),
+  CommandSpec('ledger.output', paramsRequired: true, replyRequired: true),
+  CommandSpec('ledger.jump', paramsRequired: true),
   CommandSpec('host.attach', paramsRequired: true),
   CommandSpec('host.detach', paramsRequired: true),
   CommandSpec('session.get'),
@@ -2676,6 +3020,40 @@ mixin CatsCommands implements CatsCommandTransport {
   /// This method always correlates, so it always runs.
   Future<PathListResult> pathList([PathListParams? params]) async =>
       PathListResult.fromJson(asObj(await invoke(CmdName.pathList, params?.toJson())));
+
+  /// `ui.notify`
+  Future<UINotifyResult> uiNotify(UINotifyParams params) async =>
+      UINotifyResult.fromJson(asObj(await invoke(CmdName.uiNotify, params.toJson())));
+
+  /// `ui.action`
+  Future<void> uiAction(UIActionParams params) async {
+    await invoke(CmdName.uiAction, params.toJson());
+  }
+
+  /// `pane.open_file`
+  Future<OpenFileResult> paneOpenFile(OpenFileParams params) async =>
+      OpenFileResult.fromJson(asObj(await invoke(CmdName.paneOpenFile, params.toJson())));
+
+  /// `ledger.list`
+  ///
+  /// Params are optional: absent means the zero value, which is a real call.
+  ///
+  /// Reply-gated server-side: a `cmd` with no id is dropped without running.
+  /// This method always correlates, so it always runs.
+  Future<LedgerListResult> ledgerList([LedgerListParams? params]) async =>
+      LedgerListResult.fromJson(asObj(await invoke(CmdName.ledgerList, params?.toJson())));
+
+  /// `ledger.output`
+  ///
+  /// Reply-gated server-side: a `cmd` with no id is dropped without running.
+  /// This method always correlates, so it always runs.
+  Future<LedgerOutputResult> ledgerOutput(LedgerBlockParams params) async =>
+      LedgerOutputResult.fromJson(asObj(await invoke(CmdName.ledgerOutput, params.toJson())));
+
+  /// `ledger.jump`
+  Future<void> ledgerJump(LedgerBlockParams params) async {
+    await invoke(CmdName.ledgerJump, params.toJson());
+  }
 
   /// `host.attach`
   Future<HostListResult> hostAttach(HostAttachParams params) async =>

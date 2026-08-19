@@ -72,6 +72,7 @@ abstract final class MsgType {
   static const String usage = 'usage';
   static const String clients = 'clients';
   static const String cmdResult = 'cmd_result';
+  static const String history = 'history';
 
   /// Chat surface (the ACP side panel). Added within protocol v1: an old
   /// client ignores unknown types, and a new client learns the server serves
@@ -965,6 +966,38 @@ class Focus {
       };
 }
 
+/// History is the command ledger's recent entries, pushed rather than polled.
+///
+/// A push because a command finishing is a moment only the server knows about:
+/// records come from the pane's own cathost, and a client polling for them would
+/// either lag a command it is looking at or ask on a timer for a section most
+/// sessions never open. Sent on client init and again whenever a command is
+/// recorded, carrying the whole recent list rather than a delta — the list is
+/// short, and one message that is always the complete answer costs less than a
+/// delta protocol the client could fall out of step with.
+///
+/// Wire type: `history`.
+class History {
+  const History({
+    required this.entries,
+  });
+
+  /// The `t` discriminator this class always carries. It is a property of
+  /// the type, not a field: a caller who could set it could set it wrong.
+  static const String type = 'history';
+
+  final List<LedgerEntry> entries;
+
+  factory History.fromJson(Map<String, Object?> j) => History(
+        entries: asList(j['entries'], (e) => LedgerEntry.fromJson(asObj(e))),
+      );
+
+  Map<String, Object?> toJson() => {
+        't': type,
+        'entries': [for (final e in entries) e.toJson()],
+      };
+}
+
 /// HostItem is one cathost in the roster.
 class HostItem {
   const HostItem({
@@ -1265,6 +1298,69 @@ class Layout {
       };
 }
 
+/// LedgerEntry is one recorded command on the wire. At is RFC3339 with
+/// nanoseconds — a string rather than a number because two commands a millisecond
+/// apart must still sort, and because every consumer of this either renders it or
+/// compares it lexically.
+class LedgerEntry {
+  const LedgerEntry({
+    required this.at,
+    required this.host,
+    required this.pane,
+    this.handle = '',
+    required this.cmd,
+    this.cwd = '',
+    this.exit,
+    this.durationMs = 0,
+    this.origin = '',
+    this.block = 0,
+  });
+
+  final String at;
+  final String host;
+  final int pane;
+  final String handle;
+  final String cmd;
+  final String cwd;
+  final int? exit;
+  final int durationMs;
+
+  /// "human", or the agent's label
+  final String origin;
+
+  /// Block addresses this command's output in its pane's scrollback
+  /// (ledger.output / ledger.jump). Absent when the daemon could not pin it,
+  /// which is also what an entry from a previous session looks like: a block is
+  /// live terminal state, and a restarted pane has none.
+  final int block;
+
+  factory LedgerEntry.fromJson(Map<String, Object?> j) => LedgerEntry(
+        at: asString(j['at']),
+        host: asString(j['host']),
+        pane: asInt(j['pane']),
+        handle: asString(j['handle']),
+        cmd: asString(j['cmd']),
+        cwd: asString(j['cwd']),
+        exit: asIntOrNull(j['exit']),
+        durationMs: asInt(j['duration_ms']),
+        origin: asString(j['origin']),
+        block: asInt(j['block']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'at': at,
+        'host': host,
+        'pane': pane,
+        if (handle.isNotEmpty) 'handle': handle,
+        'cmd': cmd,
+        if (cwd.isNotEmpty) 'cwd': cwd,
+        if (exit != null) 'exit': exit,
+        if (durationMs != 0) 'duration_ms': durationMs,
+        if (origin.isNotEmpty) 'origin': origin,
+        if (block != 0) 'block': block,
+      };
+}
+
 /// Mouse is a pointer event in cell coordinates within a pane (the browser
 /// converts px → cell with its own metrics). DX/DY are wheel deltas in lines
 /// (MouseWheel only). The server applies the pane's reported mouse encoding.
@@ -1320,10 +1416,17 @@ class Mouse {
 }
 
 /// Notify renders a toast + (permission-gated) system notification. Kind is
-/// "attention" (an agent hit a blocker) or "finished" (a background agent run
-/// completed). Pane/Pub name the pane so a notification click can reveal it;
-/// the front-end suppresses the whole thing when that pane is visible and the
-/// page is focused (the user is already looking at it).
+/// "attention" (an agent hit a blocker), "finished" (a background agent run
+/// completed) or "info" (anything raised through ui.notify). Pane/Pub name the
+/// pane so a notification click can reveal it; the front-end suppresses the
+/// whole thing when that pane is visible and the page is focused (the user is
+/// already looking at it).
+///
+/// ID and Actions arrive together or not at all: a notification that declared
+/// buttons carries the id they are answered by (ui.action) alongside them. The
+/// toast holding the buttons is therefore self-contained — it does not have to
+/// look the notification up to answer it, which matters because a toast can
+/// outlive the reconnect that would have invalidated any client-side handle.
 ///
 /// Wire type: `notify`.
 class Notify {
@@ -1333,6 +1436,8 @@ class Notify {
     this.body = '',
     this.pane = 0,
     this.pub = '',
+    this.id = '',
+    this.actions = const <NotifyAction>[],
   });
 
   /// The `t` discriminator this class always carries. It is a property of
@@ -1344,6 +1449,8 @@ class Notify {
   final String body;
   final int pane;
   final String pub;
+  final String id;
+  final List<NotifyAction> actions;
 
   factory Notify.fromJson(Map<String, Object?> j) => Notify(
         kind: asString(j['kind']),
@@ -1351,6 +1458,8 @@ class Notify {
         body: asString(j['body']),
         pane: asInt(j['pane']),
         pub: asString(j['pub']),
+        id: asString(j['id']),
+        actions: asList(j['actions'], (e) => NotifyAction.fromJson(asObj(e))),
       );
 
   Map<String, Object?> toJson() => {
@@ -1360,6 +1469,71 @@ class Notify {
         if (body.isNotEmpty) 'body': body,
         if (pane != 0) 'pane': pane,
         if (pub.isNotEmpty) 'pub': pub,
+        if (id.isNotEmpty) 'id': id,
+        if (actions.isNotEmpty) 'actions': [for (final e in actions) e.toJson()],
+      };
+}
+
+/// NotifyAction is one button on a notification, and it is deliberately a
+/// DECLARED EFFECT rather than a callback.
+///
+/// The caller this exists for is a hook script: it reports that its agent is
+/// blocked and exits, milliseconds before anybody sees the notification it
+/// caused. An action meaning "call me back" would therefore be dead on arrival
+/// in the case the feature is for — a phone, minutes later, with nothing left
+/// running to call. So an action says what to do and catway does it: Send is
+/// injected into Pane (falling back to the notification's own pane) exactly as
+/// pane.send_input would inject it.
+///
+/// Send may be empty, and then the action is announcement-only: a live
+/// subscriber sees the ui_action event and acts on it itself. Both halves
+/// always happen in that order — perform, then announce — so a subscriber
+/// watching a prompt being answered from a phone sees the answer after the fact
+/// rather than racing it.
+class NotifyAction {
+  const NotifyAction({
+    this.id = '',
+    required this.label,
+    this.send = '',
+    this.submit = false,
+    this.pane,
+  });
+
+  /// ID is the caller's handle for this action, echoed in the ui_action event.
+  /// Generated from the index when empty, so a caller that only wants buttons
+  /// never has to invent names.
+  final String id;
+
+  /// the button text; required
+  final String label;
+
+  /// Send is the literal text injected into the pane when the action is taken.
+  final String send;
+
+  /// Submit appends the pane's Enter, exactly as pane.send_input's submit does.
+  /// Separate from Send because "1" and "1\n" are different answers to a
+  /// prompt that filters as you type.
+  final bool submit;
+
+  /// Pane overrides the notification's pane for this action's Send. Nil is the
+  /// common case; it exists so one notification can offer "answer it" and
+  /// "look at the log over there".
+  final int? pane;
+
+  factory NotifyAction.fromJson(Map<String, Object?> j) => NotifyAction(
+        id: asString(j['id']),
+        label: asString(j['label']),
+        send: asString(j['send']),
+        submit: asBool(j['submit']),
+        pane: asIntOrNull(j['pane']),
+      );
+
+  Map<String, Object?> toJson() => {
+        if (id.isNotEmpty) 'id': id,
+        'label': label,
+        if (send.isNotEmpty) 'send': send,
+        if (submit) 'submit': submit,
+        if (pane != null) 'pane': pane,
       };
 }
 
@@ -2274,6 +2448,8 @@ Object? decodeDown(Map<String, Object?> j) {
       return Clients.fromJson(j);
     case CmdResult.type:
       return CmdResult.fromJson(j);
+    case History.type:
+      return History.fromJson(j);
     case ChatState.type:
       return ChatState.fromJson(j);
     case ChatSnapshot.type:
