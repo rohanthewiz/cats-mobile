@@ -154,9 +154,17 @@ abstract final class CmdName {
 
   static const String ledgerJump = 'ledger.jump';
 
+  static const String fileStat = 'file.stat';
+
+  static const String fileGet = 'file.get';
+
+  static const String filePut = 'file.put';
+
   static const String runbookList = 'runbook.list';
 
   static const String runbookRun = 'runbook.run';
+
+  static const String runbookRecord = 'runbook.record';
 
   static const String hostAttach = 'host.attach';
 
@@ -489,6 +497,245 @@ class DirParams {
 
   Map<String, Object?> toJson() => {
         'dir': dir,
+      };
+}
+
+/// FileGetParams: file.get — read a slice of a file.
+///
+/// Offset and Length are the transfer's chunking, done by the caller (see
+/// CmdFileGet). Both absent means "the whole file", which succeeds only when the
+/// file fits in one chunk and is refused by size otherwise — the refusal is
+/// deliberate and is explained at CmdFileGet.
+class FileGetParams {
+  const FileGetParams({
+    required this.path,
+    this.pane,
+    this.host = '',
+    this.offset = 0,
+    this.length = 0,
+  });
+
+  final String path;
+  final int? pane;
+  final String host;
+  final int offset;
+  final int length;
+
+  factory FileGetParams.fromJson(Map<String, Object?> j) => FileGetParams(
+        path: asString(j['path']),
+        pane: asIntOrNull(j['pane']),
+        host: asString(j['host']),
+        offset: asInt(j['offset']),
+        length: asInt(j['length']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'path': path,
+        if (pane != null) 'pane': pane,
+        if (host.isNotEmpty) 'host': host,
+        if (offset != 0) 'offset': offset,
+        if (length != 0) 'length': length,
+      };
+}
+
+/// FileGetResult is CmdResult.Data for file.get.
+///
+/// Data is base64 on the wire (Go renders []byte that way, and the generated
+/// Dart client receives a Uint8List), so a text file and a binary one are the
+/// same call.
+///
+/// Size is the whole file's size and EOF reports that this slice reached the end
+/// of it. EOF is what a loop terminates on rather than arithmetic over Size: the
+/// file may be growing, and a log that gained a line between two chunks should
+/// end the transfer rather than fail its length check.
+class FileGetResult {
+  const FileGetResult({
+    required this.path,
+    required this.host,
+    required this.size,
+    required this.offset,
+    this.data,
+    required this.eof,
+  });
+
+  final String path;
+  final String host;
+  final int size;
+  final int offset;
+  final Uint8List? data;
+  final bool eof;
+
+  factory FileGetResult.fromJson(Map<String, Object?> j) => FileGetResult(
+        path: asString(j['path']),
+        host: asString(j['host']),
+        size: asInt(j['size']),
+        offset: asInt(j['offset']),
+        data: asBytes(j['data']),
+        eof: asBool(j['eof']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'path': path,
+        'host': host,
+        'size': size,
+        'offset': offset,
+        if (data != null) 'data': data == null ? null : base64Encode(data!),
+        'eof': eof,
+      };
+}
+
+/// FilePutParams: file.put — write a slice of a file.
+///
+/// More marks a chunk that is not the last, and its default is what makes the
+/// simple call simple: absent means this put IS the whole file, so a one-shot
+/// caller gets an atomic create-and-rename with no flag at all, while a chunking
+/// loop sets it on every chunk except the final one.
+///
+/// Overwrite defaults false. Replacing a file is the one irreversible thing in
+/// this vocabulary, and a transfer that would do it by accident is refused with
+/// the fix named in the message.
+class FilePutParams {
+  const FilePutParams({
+    required this.path,
+    this.pane,
+    this.host = '',
+    this.data,
+    this.offset = 0,
+    this.more = false,
+    this.mode = 0,
+    this.overwrite = false,
+  });
+
+  final String path;
+  final int? pane;
+  final String host;
+  final Uint8List? data;
+  final int offset;
+  final bool more;
+  final int mode;
+  final bool overwrite;
+
+  factory FilePutParams.fromJson(Map<String, Object?> j) => FilePutParams(
+        path: asString(j['path']),
+        pane: asIntOrNull(j['pane']),
+        host: asString(j['host']),
+        data: asBytes(j['data']),
+        offset: asInt(j['offset']),
+        more: asBool(j['more']),
+        mode: asInt(j['mode']),
+        overwrite: asBool(j['overwrite']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'path': path,
+        if (pane != null) 'pane': pane,
+        if (host.isNotEmpty) 'host': host,
+        if (data != null) 'data': data == null ? null : base64Encode(data!),
+        if (offset != 0) 'offset': offset,
+        if (more) 'more': more,
+        if (mode != 0) 'mode': mode,
+        if (overwrite) 'overwrite': overwrite,
+      };
+}
+
+/// FilePutResult is CmdResult.Data for file.put. Complete reports that the file
+/// is now in place under its final name — false for every chunk of a transfer
+/// that is still running, since until the rename the bytes are in a part file.
+class FilePutResult {
+  const FilePutResult({
+    required this.path,
+    required this.host,
+    required this.written,
+    required this.complete,
+    this.size = 0,
+  });
+
+  final String path;
+  final String host;
+  final int written;
+  final bool complete;
+  final int size;
+
+  factory FilePutResult.fromJson(Map<String, Object?> j) => FilePutResult(
+        path: asString(j['path']),
+        host: asString(j['host']),
+        written: asInt(j['written']),
+        complete: asBool(j['complete']),
+        size: asInt(j['size']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'path': path,
+        'host': host,
+        'written': written,
+        'complete': complete,
+        if (size != 0) 'size': size,
+      };
+}
+
+/// FileStatParams: file.stat — what is at this path.
+class FileStatParams {
+  const FileStatParams({
+    required this.path,
+    this.pane,
+    this.host = '',
+  });
+
+  final String path;
+  final int? pane;
+  final String host;
+
+  factory FileStatParams.fromJson(Map<String, Object?> j) => FileStatParams(
+        path: asString(j['path']),
+        pane: asIntOrNull(j['pane']),
+        host: asString(j['host']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'path': path,
+        if (pane != null) 'pane': pane,
+        if (host.isNotEmpty) 'host': host,
+      };
+}
+
+/// FileStatResult is CmdResult.Data for file.stat. Path is the RESOLVED absolute
+/// path, which is the field a caller wanted as often as the size: it asked about
+/// "~/notes.md" and only the answering machine knows what that is.
+class FileStatResult {
+  const FileStatResult({
+    required this.path,
+    required this.host,
+    required this.size,
+    required this.mode,
+    required this.dir,
+    this.mtime = 0,
+  });
+
+  final String path;
+  final String host;
+  final int size;
+  final int mode;
+  final bool dir;
+
+  /// unix seconds, on the answering machine
+  final int mtime;
+
+  factory FileStatResult.fromJson(Map<String, Object?> j) => FileStatResult(
+        path: asString(j['path']),
+        host: asString(j['host']),
+        size: asInt(j['size']),
+        mode: asInt(j['mode']),
+        dir: asBool(j['dir']),
+        mtime: asInt(j['mtime']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'path': path,
+        'host': host,
+        'size': size,
+        'mode': mode,
+        'dir': dir,
+        if (mtime != 0) 'mtime': mtime,
       };
 }
 
@@ -1617,6 +1864,8 @@ class RunbookInfo {
     required this.path,
     this.steps = 0,
     this.vars = const <String>[],
+    this.triggers = const <String>[],
+    this.triggerStatus = '',
     this.error = '',
   });
 
@@ -1629,6 +1878,17 @@ class RunbookInfo {
   /// to a human — a palette entry, a completion — needs to know what it will be
   /// asked for before it runs anything.
   final List<String> vars;
+
+  /// Triggers are the event names this runbook runs itself on (`on:`), sorted
+  /// and de-duplicated. Empty for a runbook that only runs when asked.
+  final List<String> triggers;
+
+  /// TriggerStatus says why the triggers would not fire right now — suspended
+  /// after a runaway, a run already in flight, the feature switched off in the
+  /// config — and is "" when they are armed. It answers the one question a
+  /// listing cannot otherwise answer: "why did my runbook stop running?", whose
+  /// causes are all invisible state in the daemon.
+  final String triggerStatus;
   final String error;
 
   factory RunbookInfo.fromJson(Map<String, Object?> j) => RunbookInfo(
@@ -1637,6 +1897,8 @@ class RunbookInfo {
         path: asString(j['path']),
         steps: asInt(j['steps']),
         vars: asList(j['vars'], asString),
+        triggers: asList(j['triggers'], asString),
+        triggerStatus: asString(j['trigger_status']),
         error: asString(j['error']),
       );
 
@@ -1646,6 +1908,8 @@ class RunbookInfo {
         'path': path,
         if (steps != 0) 'steps': steps,
         if (vars.isNotEmpty) 'vars': vars,
+        if (triggers.isNotEmpty) 'triggers': triggers,
+        if (triggerStatus.isNotEmpty) 'trigger_status': triggerStatus,
         if (error.isNotEmpty) 'error': error,
       };
 }
@@ -1670,6 +1934,97 @@ class RunbookListResult {
   Map<String, Object?> toJson() => {
         if (dir.isNotEmpty) 'dir': dir,
         'runbooks': [for (final e in runbooks) e.toJson()],
+      };
+}
+
+/// RunbookRecordParams: runbook.record.
+///
+/// Action is the verb — start, stop, cancel, status — rather than four commands,
+/// because they are one piece of state seen from four sides and a client that
+/// knows one knows them all. Name is required by stop and is the runbook's
+/// identity: the recording exists only in memory until it is given one, which is
+/// the whole of the privacy story (see CmdRunbookRecord).
+class RunbookRecordParams {
+  const RunbookRecordParams({
+    required this.action,
+    this.name = '',
+    this.description = '',
+    this.overwrite = false,
+  });
+
+  final String action;
+  final String name;
+  final String description;
+
+  /// Overwrite permits stop to replace an existing runbook file. Off by
+  /// default: a name collision is far more often a second recording of
+  /// something already working than a deliberate replacement, and the file it
+  /// would overwrite may have been edited by hand since.
+  final bool overwrite;
+
+  factory RunbookRecordParams.fromJson(Map<String, Object?> j) => RunbookRecordParams(
+        action: asString(j['action']),
+        name: asString(j['name']),
+        description: asString(j['description']),
+        overwrite: asBool(j['overwrite']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'action': action,
+        if (name.isNotEmpty) 'name': name,
+        if (description.isNotEmpty) 'description': description,
+        if (overwrite) 'overwrite': overwrite,
+      };
+}
+
+/// RunbookRecordResult is CmdResult.Data for runbook.record.
+///
+/// Commands lists what has been captured so far, in order, so "what will I get
+/// if I stop now?" is answerable without stopping — which matters because a
+/// recorder that silently captured nothing (every command a query, the flag
+/// never set) is otherwise indistinguishable from one that is working.
+class RunbookRecordResult {
+  const RunbookRecordResult({
+    required this.action,
+    required this.recording,
+    required this.steps,
+    this.name = '',
+    this.path = '',
+    this.commands = const <String>[],
+    this.note = '',
+  });
+
+  final String action;
+  final bool recording;
+  final int steps;
+  final String name;
+  final String path;
+  final List<String> commands;
+
+  /// Note carries a condition the recorder is in that is not an error — it hit
+  /// its in-memory ceiling and stopped capturing. It is reported rather than
+  /// raised, because the command that overflowed the recording was a command
+  /// the user ran for its own sake and must not be failed for it.
+  final String note;
+
+  factory RunbookRecordResult.fromJson(Map<String, Object?> j) => RunbookRecordResult(
+        action: asString(j['action']),
+        recording: asBool(j['recording']),
+        steps: asInt(j['steps']),
+        name: asString(j['name']),
+        path: asString(j['path']),
+        commands: asList(j['commands'], asString),
+        note: asString(j['note']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'action': action,
+        'recording': recording,
+        'steps': steps,
+        if (name.isNotEmpty) 'name': name,
+        if (path.isNotEmpty) 'path': path,
+        if (commands.isNotEmpty) 'commands': commands,
+        if (note.isNotEmpty) 'note': note,
       };
 }
 
@@ -2903,8 +3258,12 @@ const List<CommandSpec> kCommandSpecs = <CommandSpec>[
   CommandSpec('ledger.list', replyRequired: true),
   CommandSpec('ledger.output', paramsRequired: true, replyRequired: true),
   CommandSpec('ledger.jump', paramsRequired: true),
+  CommandSpec('file.stat', paramsRequired: true, replyRequired: true),
+  CommandSpec('file.get', paramsRequired: true, replyRequired: true),
+  CommandSpec('file.put', paramsRequired: true),
   CommandSpec('runbook.list', replyRequired: true),
   CommandSpec('runbook.run', paramsRequired: true),
+  CommandSpec('runbook.record', paramsRequired: true),
   CommandSpec('host.attach', paramsRequired: true),
   CommandSpec('host.detach', paramsRequired: true),
   CommandSpec('session.get'),
@@ -3232,6 +3591,24 @@ mixin CatsCommands implements CatsCommandTransport {
     await invoke(CmdName.ledgerJump, params.toJson());
   }
 
+  /// `file.stat`
+  ///
+  /// Reply-gated server-side: a `cmd` with no id is dropped without running.
+  /// This method always correlates, so it always runs.
+  Future<FileStatResult> fileStat(FileStatParams params) async =>
+      FileStatResult.fromJson(asObj(await invoke(CmdName.fileStat, params.toJson())));
+
+  /// `file.get`
+  ///
+  /// Reply-gated server-side: a `cmd` with no id is dropped without running.
+  /// This method always correlates, so it always runs.
+  Future<FileGetResult> fileGet(FileGetParams params) async =>
+      FileGetResult.fromJson(asObj(await invoke(CmdName.fileGet, params.toJson())));
+
+  /// `file.put`
+  Future<FilePutResult> filePut(FilePutParams params) async =>
+      FilePutResult.fromJson(asObj(await invoke(CmdName.filePut, params.toJson())));
+
   /// `runbook.list`
   ///
   /// Reply-gated server-side: a `cmd` with no id is dropped without running.
@@ -3242,6 +3619,10 @@ mixin CatsCommands implements CatsCommandTransport {
   /// `runbook.run`
   Future<RunbookRunResult> runbookRun(RunbookRunParams params) async =>
       RunbookRunResult.fromJson(asObj(await invoke(CmdName.runbookRun, params.toJson())));
+
+  /// `runbook.record`
+  Future<RunbookRecordResult> runbookRecord(RunbookRecordParams params) async =>
+      RunbookRecordResult.fromJson(asObj(await invoke(CmdName.runbookRecord, params.toJson())));
 
   /// `host.attach`
   Future<HostListResult> hostAttach(HostAttachParams params) async =>
