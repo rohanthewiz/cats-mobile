@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body>
+    <div style="background:#14161c; flex-grow:1">
+      <div>
+        <div style="background:#14161c; display:flex; flex-direction:row; gap:8px; align-items:center; padding:10px 12px 10px 12px">
+          <button style="color:#7aa2f7; background:#00000000; font-size:26px; font-weight:400; text-align:center; display:inline; padding:0px 6px 0px 6px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" aria-label="Back" data-onclick="cb_14">‹</button>
+          <div style="flex-grow:1"><span style="color:#e6e6e6; font-size:20px; font-weight:700">vim README.md</span>
+          </div>
+          <button style="color:#7aa2f7; background:#00000000; font-size:18px; font-weight:400; text-align:center; display:inline; padding:4px 10px 4px 10px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" aria-label="Reveal this pane at the desk" data-onclick="cb_15">👁</button>
+        </div>
+        <div style="background:#2c3140; height:1px" aria-hidden="true">
+        </div>
+      </div>
+      <div style="background:#1e2129; display:flex; flex-direction:column; gap:4px; padding:8px 12px 8px 12px">
+        <div style="display:flex; flex-direction:row; gap:8px; align-items:center"><span style="color:#e6e6e6; font-size:13px">w1:p3</span><span style="color:#14161c; background:#f7768e; font-size:13px; display:inline; padding:2px 8px 2px 8px; border-radius:999px">Needs you</span><span style="color:#8b93a5; font-size:13px">claude · claude-opus-5 · high</span>
+        </div><span style="color:#8b93a5; font-size:13px">~/projs/cats · ⎇ main</span>
+      </div>
+      <div style="padding:8px 8px 8px 8px; flex-grow:1">
+        <pre style="margin:0; line-height:1.2; white-space:pre; overflow-x:auto; color:#e6e6e6; background:#101010; font-size:12px" aria-label="Terminal output for vim README.md">
+          <div style="min-height:1.2em"><span>$ make check</span>
+          </div>
+          <div style="min-height:1.2em">
+          </div>
+        </pre>
+      </div>
+      <div style="background:#1e2129; display:flex; flex-direction:column; gap:6px; padding:8px 12px 8px 12px">
+        <textarea rows="2" style="color:#e6e6e6; background:#1e2129; font-size:17px; font-weight:400; display:block; padding:12px 12px 12px 12px; border-radius:6px" aria-label="Reply to the pane" data-onchange="txt_cb_2">
+        </textarea>
+        <div style="display:flex; flex-direction:row; gap:8px; justify-content:flex-end">
+          <button style="color:#8b93a5; background:#1e2129; font-size:17px; font-weight:400; text-align:center; display:inline; padding:10px 16px 10px 16px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" aria-label="Type without Enter" aria-description="Types the text into the pane without pressing Enter" data-onclick="cb_16" disabled="disabled">Type</button>
+          <button style="color:#14161c; background:#7aa2f7; font-size:17px; font-weight:400; text-align:center; display:inline; padding:10px 16px 10px 16px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" aria-description="Types the text into the pane and presses Enter" data-onclick="cb_17">Enter</button>
+        </div>
+      </div>
+      <div style="position:fixed; top:0; left:0; right:0; bottom:0; display:none; flex-direction:column; align-items:center; justify-content:center; z-index:1000; background:#00000088">
+        <div style="background:#1e2129; display:flex; flex-direction:column; gap:12px; padding:4px 4px 4px 4px; max-width:420px"><span style="color:#e6e6e6; font-size:18px; font-weight:700">Reveal at the desk?</span><span style="color:#e6e6e6">This moves the desktop&#39;s focus to w1:p3. Whoever is at the desk will see it switch.</span>
+          <div style="display:flex; flex-direction:row; gap:8px; justify-content:flex-end; padding:8px 0px 8px 0px">
+            <button style="color:#7aa2f7; background:#00000000; font-size:17px; font-weight:400; text-align:center; display:inline; padding:10px 16px 10px 16px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" data-onclick="cb_18">Cancel</button>
+            <button style="color:#14161c; background:#7aa2f7; font-size:17px; font-weight:400; text-align:center; display:inline; padding:10px 16px 10px 16px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" data-onclick="cb_19">Reveal</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -6,3 +6,4 @@ pubspec.lock
 .idea/
 .vscode/
 .DS_Store
+wasm/dist/

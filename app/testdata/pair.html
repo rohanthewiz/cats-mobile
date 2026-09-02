@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body>
+    <div>
+      <div>
+        <div style="background:#14161c; padding:12px 16px 12px 16px; flex-grow:1">
+          <div>
+            <div style="background:#14161c; display:flex; flex-direction:row; gap:8px; align-items:center; padding:10px 12px 10px 12px">
+              <button style="color:#7aa2f7; background:#00000000; font-size:26px; font-weight:400; text-align:center; display:inline; padding:0px 6px 0px 6px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" aria-label="Back" data-onclick="cb_4">‹</button>
+              <div style="flex-grow:1"><span style="color:#e6e6e6; font-size:20px; font-weight:700">Pair with a desk</span>
+              </div>
+            </div>
+            <div style="background:#2c3140; height:1px" aria-hidden="true">
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:12px; padding:20px 20px 20px 20px; max-width:480px"><span style="color:#e6e6e6">Run `catctl pair` at the desk and paste the link it shows.</span>
+            <div style="display:flex; flex-direction:column; gap:4px"><span style="color:#e6e6e6; font-size:13px; font-weight:700; display:block">Pairing link</span>
+              <input type="text" value="" placeholder="cats://pair?u=…" style="color:#e6e6e6; background:#1e2129; font-size:17px; font-weight:400; display:block; padding:8px 12px 8px 12px; border-radius:6px" data-onchange="txt_cb_8">
+            </div><span style="color:#8b93a5; font-size:13px">Or enter the address and shared password by hand. The first connection will trust whatever certificate it sees; check the fingerprint against the desk afterwards.</span>
+            <div style="display:flex; flex-direction:column; gap:4px"><span style="color:#e6e6e6; font-size:13px; font-weight:700; display:block">Host</span>
+              <input type="text" value="" placeholder="192.168.1.20 or desk.tailnet.ts.net" style="color:#e6e6e6; background:#1e2129; font-size:17px; font-weight:400; display:block; padding:8px 12px 8px 12px; border-radius:6px" data-onchange="txt_cb_9">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px"><span style="color:#e6e6e6; font-size:13px; font-weight:700; display:block">Port</span>
+              <input type="text" value="8443" placeholder="8443" style="color:#e6e6e6; background:#1e2129; font-size:17px; font-weight:400; display:block; padding:8px 12px 8px 12px; border-radius:6px" data-onchange="txt_cb_10">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px"><span style="color:#e6e6e6; font-size:13px; font-weight:700; display:block">Password</span>
+              <input type="password" value="" placeholder="shared password" style="color:#e6e6e6; background:#1e2129; font-size:17px; font-weight:400; display:block; padding:8px 12px 8px 12px; border-radius:6px" data-onchange="txt_cb_11">
+            </div>
+            <button style="color:#14161c; background:#7aa2f7; font-size:17px; font-weight:400; width:100%; text-align:center; display:block; padding:10px 16px 10px 16px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" data-onclick="cb_5">Pair</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

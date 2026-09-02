@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The app is dark by design; tell the browser so form controls and
+         scrollbars match rather than fighting it. -->
+    <meta name="color-scheme" content="dark">
+    <title>Cats — browser preview</title>
+    <style>
+        /* A phone-shaped viewport, because every layout decision in the app
+           was made for one. */
+        html, body {
+            margin: 0;
+            height: 100%;
+            background: #0b0c10;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        body { display: flex; align-items: center; justify-content: center; }
+        #app {
+            width: 390px;   /* iPhone 15 logical width */
+            height: 844px;
+            max-height: 100vh;
+            overflow: hidden;
+            background: #14161c;
+            box-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
+            border-radius: 12px;
+        }
+        /* Make the app's root chain fill the frame. The tree above the content
+           column is Theme > Navigator frame > SafeArea, and none of those is a
+           flex container in the DOM (the runtime only makes Row/Column ones),
+           so the column's FlexGrow(1) would have nothing to grow inside.
+           Targeting the runtime's own data-node-type keeps this honest. */
+        #app { display: flex; flex-direction: column; }
+        #app [data-node-type="Theme"],
+        #app [data-node-type="SafeArea"],
+        #app [data-node-type="Fragment"],
+        #app [data-node-type="Navigator"] {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        @media (max-width: 430px) {
+            #app { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="wasm_exec.js"></script>
+<script src="grmob-runtime.js"></script>
+
+<script>
+    // The push channel and the system-event sink must exist before the wasm
+    // module is instantiated: the Go host feature-checks for both at startup.
+    // grmob-runtime.js defines them itself; this page only has to load it
+    // first, which it does above.
+    const go = new Go();
+    fetch("main.wasm")
+        .then(response => response.arrayBuffer())
+        .then(buffer => WebAssembly.instantiate(buffer, go.importObject))
+        .then(result => {
+            go.run(result.instance);
+            GrMob.mount(window.GrMobWASM.RenderInitial());
+        })
+        .catch(err => {
+            document.getElementById("app").textContent =
+                "Could not start the app: " + err;
+        });
+
+    // Every interaction funnels through here: hand the callback id and value
+    // to Go, then apply whatever patches that render produced.
+    window.GoInvokeCallback = (id, payload) => {
+        window.GrMobWASM.ReceiveEvent(id, JSON.stringify(payload));
+        GrMob.patch(window.GrMobWASM.RenderAgain());
+    };
+</script>
+</body>
+</html>

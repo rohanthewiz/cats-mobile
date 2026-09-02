@@ -520,3 +520,74 @@ the run, since grmob has no reverse attribute. Coalesce runs per row from
 run); the six-run rows measured above are the realistic case. A pane's
 `DirtyRows` is not needed for correctness, only as a cheap skip when
 rebuilding rows.
+
+## 11. Phase 4 result (2026-09-02): the app on WASM
+
+`app/` (package `catsapp`), `internal/store`, `wasm/`, `scripts/wasm.sh`.
+Every screen in the §3 list exists; camera scanning is deferred (paste the
+link, or type host/port/password). Verified on this machine: `go test -race
+./...` (three consecutive runs), `gofmt`, `go vet`, `GOOS=js GOARCH=wasm`
+build of `./app` and `./wasm`, `scripts/wasm.sh --build-only`, and the
+bundle mounted in Chrome with no console errors. Not verified: a pairing
+against a live catway, and any native build (phase 5).
+
+**Layout.** As §2 drew it, with two differences: `settings.go` is `more.go`
+(church's name), and `reply.go` folded into `pane.go` because the composer
+turned out to be thirty lines.
+
+**Decisions taken along the way.**
+
+- **The composer uses `pane.send_input`, not Paste + Key.** Paste and Key
+  need `CapKeyPane` to be addressed; without it they ride the desktop's
+  shared focus and land wherever the person at the desk last clicked.
+  `pane.send_input` is addressed by construction, paste-encoded server-side
+  against the pane's live modes, with `Submit` as the Enter. One round trip,
+  no way to type into the wrong pane. The bridge test pins that nothing but
+  that command leaves the phone (no key, paste, focus, resize, mouse).
+- **Login lives in `catsclient` (`login.go` + `login_native.go` /
+  `login_js.go`).** Native asks for JSON and gets the session in the body,
+  which becomes the bearer; WASM posts without the Accept header and lets
+  the browser keep the cookie (`js.fetch:credentials: include`). The store
+  holds the literal token `"cookie"` for a WASM pairing so `ReadToken`
+  reports paired. The cookie is same-site strict, so the preview page must
+  be served from the catway's own origin or a localhost loop.
+- **`Conn` gained `Done()` and `Err()`.** The reconnect loop needs to know
+  when the reader exited; a channel lets it select against cancellation.
+- **`Connection` (app/connection.go) is generation-numbered.** `Connect`
+  bumps a counter; a message or status write from an older loop is dropped.
+  Hard stops (cert mismatch, refused credential, protocol mismatch) never
+  retry; everything else walks `catsclient.Backoff`, with `Retry` waking a
+  loop mid-wait. Pin verdicts from the dial are recorded on first use.
+- **Copy-on-write form state.** A struct behind a `core.State` pointer,
+  mutated in place from a goroutine, is a data race with the render pass
+  (the race detector caught it in the pane composer). `update` now reads
+  the latest, copies, mutates the copy, stores that. church_mobile's
+  login/giving forms mutate in place and have the same race.
+- **Theme ink has to be pushed into typography.** `components.ListRow`
+  draws its title in `Typography.Body`, whose colour is DefaultTheme's
+  black; on the dark ground every list title vanished until `themeFor`
+  set Body/Caption/Title/Subtitle, `Components.Text`, Input and TextArea
+  from the palette. Same lesson as church's button base.
+- **The ratatui attribute bits are retyped in `gridview.go`.** cats still
+  keeps them unexported; `gridview_test.go` pins all six.
+- **Trailing blank runs are trimmed** from each grid row when they are in
+  the inherited colours with no underline/strike, so an idle 80×24 pane's
+  wire form is its text, not 1,900 spaces.
+
+**Tests.** `app/app_test.go` drives `render.Manager` against a fake desk (a
+`Dialer` handing out in-memory sockets): unpaired → pair screen; boot sends
+a viewer `init` with the stored bearer and pin; roster groups by state;
+open a pane, see its frame, see a diff land, go back; reply sends one
+addressed `pane.send_input`; socket drop → banner → fresh handshake on the
+second dial, old roster gone; cert mismatch is one dial and a banner;
+Windows follows through `workspace.focus`; Alerts newest-first with no
+record indicator until the server sends one; typed input survives
+keystrokes. `snapshot_test.go` pins six screens as htmlout goldens in
+`app/testdata/` (`go test ./app -update` to re-record). `catsclient`'s
+viewer-mode walker now has an `app/` to walk.
+
+**Known gaps for phase 5.** Camera QR (gozxing); notification actions are
+wired through `ui.action` but untested against a live server; the More
+screen's usage line assumes `UsageWindow.Pct` is a percentage; no
+foreground/background lifecycle hook yet (grmob gap noted in its ROADMAP),
+so a backgrounded phone reconnects only when the socket dies.

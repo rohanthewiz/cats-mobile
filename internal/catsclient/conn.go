@@ -151,6 +151,7 @@ type Conn struct {
 	pending         map[string]*pending
 	nextID          int
 	closed          bool
+	closeErr        error
 	caps            map[string]bool
 	pinnedWorkspace string
 	welcome         *wire.Welcome
@@ -595,6 +596,7 @@ func (c *Conn) fail(err error) {
 		return
 	}
 	c.closed = true
+	c.closeErr = err
 	pend := c.pending
 	c.pending = map[string]*pending{}
 	c.decideWelcomeLocked(nil, err)
@@ -611,6 +613,21 @@ func (c *Conn) fail(err error) {
 		}
 		p.ch <- result{err: e}
 	}
+}
+
+// Done is closed when the reader goroutine has exited: the socket failed,
+// or Close was called. It is the signal a reconnect loop waits on, and it is
+// a channel rather than a callback so the loop can select on it against its
+// own cancellation. Err says why.
+func (c *Conn) Done() <-chan struct{} { return c.readerDone }
+
+// Err is why the connection closed, or nil while it is open. A socket that
+// died underneath is a DisconnectedError whose Cause is the transport's
+// error; a deliberate Close is a DisconnectedError with no cause.
+func (c *Conn) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closeErr
 }
 
 // Close fails every pending call, closes the socket and waits for the reader

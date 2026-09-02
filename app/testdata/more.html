@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body>
+    <div>
+      <div style="background:#14161c; flex-grow:1">
+        <div style="flex-grow:1; overflow:hidden">
+          <div style="flex-grow:1">
+            <div>
+              <div style="background:#14161c; display:flex; flex-direction:row; gap:8px; align-items:center; padding:10px 12px 10px 12px">
+                <div style="flex-grow:1"><span style="color:#e6e6e6; font-size:20px; font-weight:700">More</span>
+                </div>
+              </div>
+              <div style="background:#2c3140; height:1px" aria-hidden="true">
+              </div>
+            </div>
+            <div style="flex-grow:1">
+              <div>
+                <div style="padding:4px 16px 4px 16px"><span style="color:#8b93a5; font-size:13px; font-weight:700">CONNECTION</span>
+                </div>
+                <div style="display:flex; flex-direction:row; gap:8px; align-items:center; padding:8px 16px 8px 16px"><span style="color:#7aa2f7; font-size:18px; width:28px">🟢</span>
+                  <div style="display:flex; flex-direction:column; gap:4px; flex-grow:1"><span style="color:#e6e6e6; font-size:17px; font-weight:400; display:block">Connected</span><span style="color:#8b93a5; font-size:13px; font-weight:400; display:block">Endpoint(desk, direct, tls)</span>
+                  </div>
+                  <button style="color:#7aa2f7; background:#00000000; font-size:13px; font-weight:400; text-align:center; display:inline; padding:10px 16px 10px 16px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" data-onclick="cb_20">Retry</button>
+                </div>
+                <div style="display:flex; flex-direction:row; gap:8px; align-items:center; padding:8px 16px 8px 16px">
+                  <div style="display:flex; flex-direction:column; gap:4px; flex-grow:1"><span style="color:#e6e6e6; font-size:17px; font-weight:400; display:block">Server capabilities</span><span style="color:#8b93a5; font-size:13px; font-weight:400; display:block">viewer mode honoured · per-window following · pane-addressed input · 1 viewer(s) connected</span>
+                  </div>
+                </div>
+                <div style="padding:4px 16px 4px 16px"><span style="color:#8b93a5; font-size:13px; font-weight:700">DESKS</span>
+                </div>
+                <div style="display:flex; flex-direction:row; gap:8px; align-items:center; padding:8px 16px 8px 16px"><span style="color:#7aa2f7; font-size:18px; width:28px">🖥</span>
+                  <div style="display:flex; flex-direction:column; gap:4px; flex-grow:1"><span style="color:#e6e6e6; font-size:17px; font-weight:400; display:block">Endpoint(desk, direct, tls)</span><span style="color:#8b93a5; font-size:13px; font-weight:400; display:block">direct · pin abcdef01…23456789</span>
+                  </div><span style="color:#14161c; background:#9ece6a; font-size:13px; display:inline; padding:2px 8px 2px 8px; border-radius:999px">Active</span>
+                </div>
+                <div style="display:flex; flex-direction:row; gap:8px; align-items:center; padding:8px 16px 8px 16px" data-onclick="cb_21"><span style="color:#7aa2f7; font-size:18px; width:28px">➕</span>
+                  <div style="display:flex; flex-direction:column; gap:4px; flex-grow:1"><span style="color:#e6e6e6; font-size:17px; font-weight:400; display:block">Pair another desk</span>
+                  </div>
+                </div>
+                <div style="display:flex; flex-direction:row; gap:8px; align-items:center; padding:8px 16px 8px 16px" data-onclick="cb_22"><span style="color:#7aa2f7; font-size:18px; width:28px">🗑</span>
+                  <div style="display:flex; flex-direction:column; gap:4px; flex-grow:1"><span style="color:#e6e6e6; font-size:17px; font-weight:400; display:block">Forget this device</span><span style="color:#8b93a5; font-size:13px; font-weight:400; display:block">Clears the session and certificate pin for Endpoint(desk, direct, tls)</span>
+                  </div>
+                </div>
+                <div style="padding:4px 16px 4px 16px"><span style="color:#8b93a5; font-size:13px; font-weight:700">ABOUT</span>
+                </div>
+                <div style="display:flex; flex-direction:row; gap:8px; align-items:center; padding:8px 16px 8px 16px"><span style="color:#7aa2f7; font-size:18px; width:28px">ℹ️</span>
+                  <div style="display:flex; flex-direction:column; gap:4px; flex-grow:1"><span style="color:#e6e6e6; font-size:17px; font-weight:400; display:block">Cats 0.1.0</span><span style="color:#8b93a5; font-size:13px; font-weight:400; display:block">cats wire: not linked</span>
+                  </div>
+                </div>
+                <div style="width:24px; height:24px; flex-shrink:0">
+                </div>
+              </div>
+            </div>
+            <div style="position:fixed; top:0; left:0; right:0; bottom:0; display:none; flex-direction:column; align-items:center; justify-content:center; z-index:1000; background:#00000088">
+              <div style="background:#1e2129; display:flex; flex-direction:column; gap:12px; padding:4px 4px 4px 4px; max-width:420px"><span style="color:#e6e6e6; font-size:18px; font-weight:700">Forget this device?</span><span style="color:#e6e6e6">The desk will no longer recognise this phone. Pair again to reconnect.</span>
+                <div style="display:flex; flex-direction:row; gap:8px; justify-content:flex-end; padding:8px 0px 8px 0px">
+                  <button style="color:#7aa2f7; background:#00000000; font-size:17px; font-weight:400; text-align:center; display:inline; padding:10px 16px 10px 16px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" data-onclick="cb_23">Cancel</button>
+                  <button style="color:#14161c; background:#7aa2f7; font-size:17px; font-weight:400; text-align:center; display:inline; padding:10px 16px 10px 16px; border-radius:8px; box-shadow:0 0.33px 0.5px rgba(0,0,0,0.33)" data-onclick="cb_24">Forget</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="background:#2c3140; height:1px" aria-hidden="true">
+          </div>
+          <div style="background:#14161c; display:flex; flex-direction:row; justify-content:space-around; align-items:center; padding:6px 4px 6px 4px">
+            <div style="display:flex; flex-direction:column; align-items:center; padding:2px 0px 2px 0px; flex-grow:1" aria-label="Agents" data-onclick="cb_26">
+              <div style="display:flex; flex-direction:column; gap:2px; align-items:center"><span style="font-size:20px">🐾</span><span style="color:#8b93a5; font-size:11px">Agents</span>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; padding:2px 0px 2px 0px; flex-grow:1" aria-label="Windows" data-onclick="cb_27">
+              <div style="display:flex; flex-direction:column; gap:2px; align-items:center"><span style="font-size:20px">🪟</span><span style="color:#8b93a5; font-size:11px">Windows</span>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; padding:2px 0px 2px 0px; flex-grow:1" aria-label="Alerts" data-onclick="cb_28">
+              <div style="display:flex; flex-direction:column; gap:2px; align-items:center"><span style="font-size:20px">🔔</span><span style="color:#8b93a5; font-size:11px">Alerts</span>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; padding:2px 0px 2px 0px; flex-grow:1" aria-label="More, selected" data-onclick="cb_29">
+              <div style="display:flex; flex-direction:column; gap:2px; align-items:center"><span style="font-size:20px">☰</span><span style="color:#7aa2f7; font-size:11px">More</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
