@@ -52,6 +52,17 @@ class CatsSession {
   bool serverShutDown = false;
   UpdateReady? updateReady;
 
+  /// The macro recorder's state, server-authoritative. Null until the server
+  /// pushes one — which a server too old to send `record` never does, so null
+  /// means "unknown", not "idle", and the phone should draw no indicator rather
+  /// than an unlit one it cannot vouch for.
+  RecordMsg? record;
+
+  /// Runbook runs in flight, whatever started them. Replaced wholesale on every
+  /// push: the message carries the entire set, so a run that has finished is
+  /// absent from the next one rather than marked done in it.
+  List<RunbookRun> runbookRuns = const [];
+
   /// Folds one decoded down-message. Unknown types never reach here — the
   /// generated [decodeDown] drops them, per the protocol's own rule.
   void apply(Object message) {
@@ -93,6 +104,12 @@ class CatsSession {
         modes[m.pane] = m;
       case final PaneExited m:
         exitCodes[m.pane] = m.code;
+      case final PaneRespawned m:
+        // A pane's death is remembered here, not re-derived from the layout, so
+        // nothing else would ever take the "exited (N)" back off. Dropping the
+        // key rather than storing a sentinel keeps "is this pane dead" a plain
+        // containsKey, the same question it was before the pane came back.
+        exitCodes.remove(m.pane);
       case final PaneFrame m:
         gridFor(m.pane).applyFrame(m);
       case final PaneDiff m:
@@ -113,6 +130,10 @@ class CatsSession {
         serverShutDown = true;
       case final UpdateReady m:
         updateReady = m;
+      case final RecordMsg m:
+        record = m;
+      case final RunbookRuns m:
+        runbookRuns = m.runs;
       // Welcome and CmdResult are the connection's business, not the session's.
     }
   }

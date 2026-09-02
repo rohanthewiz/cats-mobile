@@ -68,6 +68,8 @@ abstract final class CmdName {
 
   static const String paneRename = 'pane.rename';
 
+  static const String paneFlag = 'pane.flag';
+
   static const String paneResizeBorder = 'pane.resize_border';
 
   static const String scroll = 'scroll';
@@ -104,7 +106,13 @@ abstract final class CmdName {
 
   static const String workspaceLock = 'workspace.lock';
 
+  static const String workspaceFlag = 'workspace.flag';
+
   static const String agentFocus = 'agent.focus';
+
+  static const String navBack = 'nav.back';
+
+  static const String navForward = 'nav.forward';
 
   static const String serverReloadConfig = 'server.reload_config';
 
@@ -183,6 +191,8 @@ abstract final class CmdName {
   static const String paneGet = 'pane.get';
 
   static const String hostList = 'host.list';
+
+  static const String flagList = 'flag.list';
 }
 
 /// A screen-buffer coordinate. On the wire it is the bare array
@@ -738,6 +748,120 @@ class FileStatResult {
         'mode': mode,
         'dir': dir,
         if (mtime != 0) 'mtime': mtime,
+      };
+}
+
+/// FlagListParams: flag.list. Kind narrows the listing to one kind ("" — the
+/// usual call — lists every flag). It is validated with the same flags.ParseKind
+/// the setters use, so `flag.list` with a typo is refused rather than answering
+/// "nothing flagged", which is the one wrong answer a listing can give: it looks
+/// exactly like a session with no flags in it.
+///
+/// A custom glyph filters too — it is a kind like any other — which is what makes
+/// `catctl flags 🍕` mean the same thing as `catctl flags followup`.
+class FlagListParams {
+  const FlagListParams({
+    this.kind = '',
+  });
+
+  final String kind;
+
+  factory FlagListParams.fromJson(Map<String, Object?> j) => FlagListParams(
+        kind: asString(j['kind']),
+      );
+
+  Map<String, Object?> toJson() => {
+        if (kind.isNotEmpty) 'kind': kind,
+      };
+}
+
+/// FlagListResult is CmdResult.Data for flag.list: the flagged rows of
+/// workspace.list and pane.list, filtered but otherwise untouched.
+///
+/// Two lists rather than one merged one, and the same row structs rather than a
+/// third: the fields a client wants beside the mark differ by scope (a workspace
+/// has a tab count, a pane has an agent and a handle), so merging them would
+/// produce a row that is half empty either way. Both are in the underlying
+/// lists' order — the sidebar's own top-to-bottom order — not sorted by recency,
+/// so a listing run twice in a row reads the same way and "did I clear that one"
+/// is answered by a glance at the same position rather than a re-scan.
+///
+/// Both slices are always present, empty rather than null, so a client can loop
+/// over them without a nil check.
+class FlagListResult {
+  const FlagListResult({
+    required this.workspaces,
+    required this.panes,
+  });
+
+  final List<WorkspaceEntry> workspaces;
+  final List<PaneInfo> panes;
+
+  factory FlagListResult.fromJson(Map<String, Object?> j) => FlagListResult(
+        workspaces: asList(j['workspaces'], (e) => WorkspaceEntry.fromJson(asObj(e))),
+        panes: asList(j['panes'], (e) => PaneInfo.fromJson(asObj(e))),
+      );
+
+  Map<String, Object?> toJson() => {
+        'workspaces': [for (final e in workspaces) e.toJson()],
+        'panes': [for (final e in panes) e.toJson()],
+      };
+}
+
+/// FlagPaneParams: pane.flag. Kind "" clears the flag, the same way an empty
+/// name clears a custom title — every clear in the vocabulary is spelled the
+/// same. Kind is either a named kind or a single glyph; anything else is
+/// refused rather than stored (flags.ParseKind).
+///
+/// Note is only kept when a Kind is given: a note with no mark is invisible in
+/// every surface that draws these.
+class FlagPaneParams {
+  const FlagPaneParams({
+    required this.pane,
+    required this.kind,
+    this.note = '',
+  });
+
+  final int pane;
+  final String kind;
+  final String note;
+
+  factory FlagPaneParams.fromJson(Map<String, Object?> j) => FlagPaneParams(
+        pane: asInt(j['pane']),
+        kind: asString(j['kind']),
+        note: asString(j['note']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'pane': pane,
+        'kind': kind,
+        if (note.isNotEmpty) 'note': note,
+      };
+}
+
+/// FlagWorkspaceParams: workspace.flag. ID "" means the active workspace, the
+/// same default workspace.lock and workspace.close take.
+class FlagWorkspaceParams {
+  const FlagWorkspaceParams({
+    this.id = '',
+    required this.kind,
+    this.note = '',
+  });
+
+  final String id;
+  final String kind;
+  final String note;
+
+  factory FlagWorkspaceParams.fromJson(Map<String, Object?> j) => FlagWorkspaceParams(
+        id: asString(j['id']),
+        kind: asString(j['kind']),
+        note: asString(j['note']),
+      );
+
+  Map<String, Object?> toJson() => {
+        if (id.isNotEmpty) 'id': id,
+        'kind': kind,
+        if (note.isNotEmpty) 'note': note,
       };
 }
 
@@ -1342,6 +1466,9 @@ class PaneInfo {
     this.name = '',
     required this.focused,
     required this.visible,
+    this.flag = '',
+    this.flagNote = '',
+    this.flagAtMs = 0,
     this.agent = '',
     this.agentState = '',
     this.agentModel = '',
@@ -1357,6 +1484,20 @@ class PaneInfo {
   final String name;
   final bool focused;
   final bool visible;
+
+  /// Flag is the flag's kind: one of the named kinds ("followup", "star", …)
+  /// or a literal glyph the user chose. Empty means unflagged. Clients render
+  /// it through the same path either way — see internal/flags.
+  final String flag;
+
+  /// FlagNote is the free text pinned alongside it; empty is normal.
+  final String flagNote;
+
+  /// FlagAtMs is when the flag was last set, in Unix milliseconds. Absolute
+  /// rather than an age, because a flag is not re-sent when nothing about it
+  /// changed — a client that wants "flagged 3d ago" subtracts it from its own
+  /// clock and re-renders on its own tick.
+  final int flagAtMs;
 
   /// detected agent label ("claude", "codex", …)
   final String agent;
@@ -1381,6 +1522,14 @@ class PaneInfo {
   /// machine is actually holding the PTY.
   final String host;
 
+  /// The embedded `FlagInfo` block, regrouped. Go's embedding flattens these
+  /// onto the wire; this hands them back as the unit they were declared as.
+  FlagInfo get flagInfo => FlagInfo(
+        flag: flag,
+        flagNote: flagNote,
+        flagAtMs: flagAtMs,
+      );
+
   /// The embedded `PaneMeta` block, regrouped. Go's embedding flattens these
   /// onto the wire; this hands them back as the unit they were declared as.
   PaneMeta get paneMeta => PaneMeta(
@@ -1398,6 +1547,9 @@ class PaneInfo {
         name: asString(j['name']),
         focused: asBool(j['focused']),
         visible: asBool(j['visible']),
+        flag: asString(j['flag']),
+        flagNote: asString(j['flag_note']),
+        flagAtMs: asInt(j['flag_at_ms']),
         agent: asString(j['agent']),
         agentState: asString(j['agent_state']),
         agentModel: asString(j['agent_model']),
@@ -1412,6 +1564,9 @@ class PaneInfo {
         if (name.isNotEmpty) 'name': name,
         'focused': focused,
         'visible': visible,
+        if (flag.isNotEmpty) 'flag': flag,
+        if (flagNote.isNotEmpty) 'flag_note': flagNote,
+        if (flagAtMs != 0) 'flag_at_ms': flagAtMs,
         if (agent.isNotEmpty) 'agent': agent,
         if (agentState.isNotEmpty) 'agent_state': agentState,
         if (agentModel.isNotEmpty) 'agent_model': agentModel,
@@ -1925,6 +2080,9 @@ class RunbookInfo {
     this.vars = const <String>[],
     this.triggers = const <String>[],
     this.triggerStatus = '',
+    this.outline = const <String>[],
+    this.expectSteps = const <int>[],
+    this.continueOnErrorSteps = const <int>[],
     this.error = '',
   });
 
@@ -1948,6 +2106,42 @@ class RunbookInfo {
   /// listing cannot otherwise answer: "why did my runbook stop running?", whose
   /// causes are all invisible state in the daemon.
   final String triggerStatus;
+
+  /// Outline is one short line per step — the command and a digest of its
+  /// params — so a caller can show what a runbook WILL DO before running it.
+  /// Empty for a file that would not parse, which has no steps to describe.
+  ///
+  /// Pre-rendered by the server, and truncated there, because the alternative
+  /// is shipping the params themselves: a `file.put` step carries its whole
+  /// payload, and a listing that re-reads on every run finish cannot be
+  /// carrying file contents. Each line is capped, and so is the NUMBER of
+  /// lines — Steps already reports the true count, so a caller can say how
+  /// many were left out without the listing growing with the document.
+  ///
+  /// A summary, not a specification: the values shown still carry their
+  /// `{{ ... }}` references unresolved, since resolving them needs a run.
+  final List<String> outline;
+
+  /// ExpectSteps and ContinueOnErrorSteps are the 1-based positions of the
+  /// steps carrying `expect:` and `continue_on_error: true` — the two fields
+  /// that change what a run MEANS without changing what any step does.
+  ///
+  /// Positions rather than lines because that is what they cost: an outline
+  /// line is prose the server had to render and clip, while a position is
+  /// three bytes that a caller already has a numbered list to resolve against.
+  /// It is also why they are NOT folded into Outline — a line has room for
+  /// what the step does or for how it is judged, not both, and the surfaces
+  /// that show one line per step (the palette, the row's hover) are the ones
+  /// with the least room of all. A caller with a whole dialog to spend, such
+  /// as the browser's preview notice, reads these and says which steps.
+  ///
+  /// Uncapped, unlike Outline: a document is bounded at 200 steps, so the
+  /// worst case here is two short int arrays, and capping them would mean
+  /// under-reporting an `expect:` rather than merely not printing a line.
+  /// They therefore may name steps beyond the outline's own cap, which is
+  /// correct — the step is in the file whether or not the list showed it.
+  final List<int> expectSteps;
+  final List<int> continueOnErrorSteps;
   final String error;
 
   factory RunbookInfo.fromJson(Map<String, Object?> j) => RunbookInfo(
@@ -1958,6 +2152,9 @@ class RunbookInfo {
         vars: asList(j['vars'], asString),
         triggers: asList(j['triggers'], asString),
         triggerStatus: asString(j['trigger_status']),
+        outline: asList(j['outline'], asString),
+        expectSteps: asList(j['expect_steps'], asInt),
+        continueOnErrorSteps: asList(j['continue_on_error_steps'], asInt),
         error: asString(j['error']),
       );
 
@@ -1969,6 +2166,9 @@ class RunbookInfo {
         if (vars.isNotEmpty) 'vars': vars,
         if (triggers.isNotEmpty) 'triggers': triggers,
         if (triggerStatus.isNotEmpty) 'trigger_status': triggerStatus,
+        if (outline.isNotEmpty) 'outline': outline,
+        if (expectSteps.isNotEmpty) 'expect_steps': expectSteps,
+        if (continueOnErrorSteps.isNotEmpty) 'continue_on_error_steps': continueOnErrorSteps,
         if (error.isNotEmpty) 'error': error,
       };
 }
@@ -2944,6 +3144,9 @@ class WorkspaceEntry {
     required this.active,
     required this.tabs,
     this.locked = false,
+    this.flag = '',
+    this.flagNote = '',
+    this.flagAtMs = 0,
     this.host = '',
   });
 
@@ -2960,6 +3163,20 @@ class WorkspaceEntry {
   /// closed to automation (workspace.lock)
   final bool locked;
 
+  /// Flag is the flag's kind: one of the named kinds ("followup", "star", …)
+  /// or a literal glyph the user chose. Empty means unflagged. Clients render
+  /// it through the same path either way — see internal/flags.
+  final String flag;
+
+  /// FlagNote is the free text pinned alongside it; empty is normal.
+  final String flagNote;
+
+  /// FlagAtMs is when the flag was last set, in Unix milliseconds. Absolute
+  /// rather than an age, because a flag is not re-sent when nothing about it
+  /// changed — a client that wants "flagged 3d ago" subtracts it from its own
+  /// clock and re-renders on its own tick.
+  final int flagAtMs;
+
   /// Host is the cathost new panes in this workspace land on, as the MODEL
   /// records it: empty means "whatever the default host is", which is what a
   /// workspace created before hosts existed (or on the default) stores. It is a
@@ -2968,12 +3185,23 @@ class WorkspaceEntry {
   /// the workspace ever named a machine.
   final String host;
 
+  /// The embedded `FlagInfo` block, regrouped. Go's embedding flattens these
+  /// onto the wire; this hands them back as the unit they were declared as.
+  FlagInfo get flagInfo => FlagInfo(
+        flag: flag,
+        flagNote: flagNote,
+        flagAtMs: flagAtMs,
+      );
+
   factory WorkspaceEntry.fromJson(Map<String, Object?> j) => WorkspaceEntry(
         id: asString(j['id']),
         name: asString(j['name']),
         active: asBool(j['active']),
         tabs: asInt(j['tabs']),
         locked: asBool(j['locked']),
+        flag: asString(j['flag']),
+        flagNote: asString(j['flag_note']),
+        flagAtMs: asInt(j['flag_at_ms']),
         host: asString(j['host']),
       );
 
@@ -2983,6 +3211,9 @@ class WorkspaceEntry {
         'active': active,
         'tabs': tabs,
         if (locked) 'locked': locked,
+        if (flag.isNotEmpty) 'flag': flag,
+        if (flagNote.isNotEmpty) 'flag_note': flagNote,
+        if (flagAtMs != 0) 'flag_at_ms': flagAtMs,
         if (host.isNotEmpty) 'host': host,
       };
 }
@@ -3274,6 +3505,7 @@ const List<CommandSpec> kCommandSpecs = <CommandSpec>[
   CommandSpec('pane.swap_with', paramsRequired: true),
   CommandSpec('pane.zoom'),
   CommandSpec('pane.rename', paramsRequired: true),
+  CommandSpec('pane.flag', paramsRequired: true),
   CommandSpec('pane.resize_border', paramsRequired: true),
   CommandSpec('scroll', paramsRequired: true),
   CommandSpec('read', paramsRequired: true, replyRequired: true),
@@ -3292,7 +3524,10 @@ const List<CommandSpec> kCommandSpecs = <CommandSpec>[
   CommandSpec('workspace.rename', paramsRequired: true),
   CommandSpec('workspace.move', paramsRequired: true),
   CommandSpec('workspace.lock', paramsRequired: true),
+  CommandSpec('workspace.flag', paramsRequired: true),
   CommandSpec('agent.focus', paramsRequired: true),
+  CommandSpec('nav.back'),
+  CommandSpec('nav.forward'),
   CommandSpec('server.reload_config'),
   CommandSpec('server.stop'),
   CommandSpec('usage.refresh'),
@@ -3332,6 +3567,7 @@ const List<CommandSpec> kCommandSpecs = <CommandSpec>[
   CommandSpec('pane.list'),
   CommandSpec('pane.get'),
   CommandSpec('host.list'),
+  CommandSpec('flag.list'),
 ];
 
 /// What a generated command method needs from the connection.
@@ -3402,6 +3638,11 @@ mixin CatsCommands implements CatsCommandTransport {
   /// `pane.rename`
   Future<void> paneRename(RenamePaneParams params) async {
     await invoke(CmdName.paneRename, params.toJson());
+  }
+
+  /// `pane.flag`
+  Future<void> paneFlag(FlagPaneParams params) async {
+    await invoke(CmdName.paneFlag, params.toJson());
   }
 
   /// `pane.resize_border`
@@ -3505,9 +3746,24 @@ mixin CatsCommands implements CatsCommandTransport {
     await invoke(CmdName.workspaceLock, params.toJson());
   }
 
+  /// `workspace.flag`
+  Future<void> workspaceFlag(FlagWorkspaceParams params) async {
+    await invoke(CmdName.workspaceFlag, params.toJson());
+  }
+
   /// `agent.focus`
   Future<void> agentFocus(PaneParams params) async {
     await invoke(CmdName.agentFocus, params.toJson());
+  }
+
+  /// `nav.back`
+  Future<void> navBack() async {
+    await invoke(CmdName.navBack, null);
+  }
+
+  /// `nav.forward`
+  Future<void> navForward() async {
+    await invoke(CmdName.navForward, null);
   }
 
   /// `server.reload_config`
@@ -3723,4 +3979,10 @@ mixin CatsCommands implements CatsCommandTransport {
   /// `host.list`
   Future<HostListResult> hostList() async =>
       HostListResult.fromJson(asObj(await invoke(CmdName.hostList, null)));
+
+  /// `flag.list`
+  ///
+  /// Params are optional: absent means the zero value, which is a real call.
+  Future<FlagListResult> flagList([FlagListParams? params]) async =>
+      FlagListResult.fromJson(asObj(await invoke(CmdName.flagList, params?.toJson())));
 }

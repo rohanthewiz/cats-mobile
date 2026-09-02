@@ -60,6 +60,12 @@ abstract final class MsgType {
   static const String paneAgent = 'pane_agent';
   static const String paneModes = 'pane_modes';
   static const String paneExited = 'pane_exited';
+
+  /// MsgPaneRespawned is pane_exited's inverse: the pane's PTY came back
+  /// (cathost restart, or a move to another host), so the chrome a pane_exited
+  /// installed must come off. Added within protocol v1 — an old client ignores
+  /// it and shows the same stale red header it showed before this existed.
+  static const String paneRespawned = 'pane_respawned';
   static const String paneFrame = 'pane_frame';
   static const String paneDiff = 'pane_diff';
   static const String clipboard = 'clipboard';
@@ -73,6 +79,17 @@ abstract final class MsgType {
   static const String clients = 'clients';
   static const String cmdResult = 'cmd_result';
   static const String history = 'history';
+
+  /// MsgRecord is the macro recorder's state (runbook.record). Added within
+  /// protocol v1: an old client ignores the type and simply never draws the
+  /// indicator, which is exactly the UI it had before this existed.
+  static const String record = 'record';
+
+  /// MsgRunbookRuns is the set of runbook runs in flight (runbook.run and the
+  /// `on:` triggers). Added within protocol v1: an old client ignores the type
+  /// and marks only the runs it started itself, which is the UI it had before
+  /// this existed.
+  static const String runbookRuns = 'runbook_runs';
 
   /// Chat surface (the ACP side panel). Added within protocol v1: an old
   /// client ignores unknown types, and a new client learns the server serves
@@ -210,6 +227,9 @@ class AgentItem {
     this.model = '',
     required this.seen,
     required this.sinceMs,
+    this.flag = '',
+    this.flagNote = '',
+    this.flagAtMs = 0,
   });
 
   final int pane;
@@ -237,6 +257,28 @@ class AgentItem {
   /// value, since the rollup ships in the same breath as the change.
   final int sinceMs;
 
+  /// Flag is the flag's kind: one of the named kinds ("followup", "star", …)
+  /// or a literal glyph the user chose. Empty means unflagged. Clients render
+  /// it through the same path either way — see internal/flags.
+  final String flag;
+
+  /// FlagNote is the free text pinned alongside it; empty is normal.
+  final String flagNote;
+
+  /// FlagAtMs is when the flag was last set, in Unix milliseconds. Absolute
+  /// rather than an age, because a flag is not re-sent when nothing about it
+  /// changed — a client that wants "flagged 3d ago" subtracts it from its own
+  /// clock and re-renders on its own tick.
+  final int flagAtMs;
+
+  /// The embedded `FlagInfo` block, regrouped. Go's embedding flattens these
+  /// onto the wire; this hands them back as the unit they were declared as.
+  FlagInfo get flagInfo => FlagInfo(
+        flag: flag,
+        flagNote: flagNote,
+        flagAtMs: flagAtMs,
+      );
+
   factory AgentItem.fromJson(Map<String, Object?> j) => AgentItem(
         pane: asInt(j['pane']),
         pub: asString(j['pub']),
@@ -247,6 +289,9 @@ class AgentItem {
         model: asString(j['model']),
         seen: asBool(j['seen']),
         sinceMs: asInt(j['since_ms']),
+        flag: asString(j['flag']),
+        flagNote: asString(j['flag_note']),
+        flagAtMs: asInt(j['flag_at_ms']),
       );
 
   Map<String, Object?> toJson() => {
@@ -259,6 +304,9 @@ class AgentItem {
         if (model.isNotEmpty) 'model': model,
         'seen': seen,
         'since_ms': sinceMs,
+        if (flag.isNotEmpty) 'flag': flag,
+        if (flagNote.isNotEmpty) 'flag_note': flagNote,
+        if (flagAtMs != 0) 'flag_at_ms': flagAtMs,
       };
 }
 
@@ -995,6 +1043,53 @@ class ErrorMsg {
         't': type,
         'msg': msg,
         if (pane != 0) 'pane': pane,
+      };
+}
+
+/// FlagInfo is a user flag as it appears on the wire: three flat fields,
+/// embedded into every struct that can carry one (WorkspaceInfo, PaneInfo, and
+/// their browserproto counterparts).
+///
+/// Flat rather than a nested object, and embedded rather than repeated, for two
+/// reasons. Flat keeps the shape identical to the `locked` / `host` fields
+/// beside it, so a client reads one more optional scalar rather than learning a
+/// sub-object; embedded means the documentation, the JSON keys and the
+/// conversion live in exactly one place, and cmd/catgen-dart still flattens it
+/// onto each class while offering the group back as a `flagInfo` getter.
+///
+/// All three are omitempty, so an unflagged subject — which is nearly all of
+/// them — costs nothing on the wire.
+class FlagInfo {
+  const FlagInfo({
+    this.flag = '',
+    this.flagNote = '',
+    this.flagAtMs = 0,
+  });
+
+  /// Flag is the flag's kind: one of the named kinds ("followup", "star", …)
+  /// or a literal glyph the user chose. Empty means unflagged. Clients render
+  /// it through the same path either way — see internal/flags.
+  final String flag;
+
+  /// FlagNote is the free text pinned alongside it; empty is normal.
+  final String flagNote;
+
+  /// FlagAtMs is when the flag was last set, in Unix milliseconds. Absolute
+  /// rather than an age, because a flag is not re-sent when nothing about it
+  /// changed — a client that wants "flagged 3d ago" subtracts it from its own
+  /// clock and re-renders on its own tick.
+  final int flagAtMs;
+
+  factory FlagInfo.fromJson(Map<String, Object?> j) => FlagInfo(
+        flag: asString(j['flag']),
+        flagNote: asString(j['flag_note']),
+        flagAtMs: asInt(j['flag_at_ms']),
+      );
+
+  Map<String, Object?> toJson() => {
+        if (flag.isNotEmpty) 'flag': flag,
+        if (flagNote.isNotEmpty) 'flag_note': flagNote,
+        if (flagAtMs != 0) 'flag_at_ms': flagAtMs,
       };
 }
 
@@ -1910,6 +2005,9 @@ class PaneRectInfo {
     this.scrollbar,
     required this.focused,
     this.host = '',
+    this.flag = '',
+    this.flagNote = '',
+    this.flagAtMs = 0,
   });
 
   final int pane;
@@ -1928,6 +2026,28 @@ class PaneRectInfo {
   /// answer is the same for every pane and says nothing.
   final String host;
 
+  /// Flag is the flag's kind: one of the named kinds ("followup", "star", …)
+  /// or a literal glyph the user chose. Empty means unflagged. Clients render
+  /// it through the same path either way — see internal/flags.
+  final String flag;
+
+  /// FlagNote is the free text pinned alongside it; empty is normal.
+  final String flagNote;
+
+  /// FlagAtMs is when the flag was last set, in Unix milliseconds. Absolute
+  /// rather than an age, because a flag is not re-sent when nothing about it
+  /// changed — a client that wants "flagged 3d ago" subtracts it from its own
+  /// clock and re-renders on its own tick.
+  final int flagAtMs;
+
+  /// The embedded `FlagInfo` block, regrouped. Go's embedding flattens these
+  /// onto the wire; this hands them back as the unit they were declared as.
+  FlagInfo get flagInfo => FlagInfo(
+        flag: flag,
+        flagNote: flagNote,
+        flagAtMs: flagAtMs,
+      );
+
   factory PaneRectInfo.fromJson(Map<String, Object?> j) => PaneRectInfo(
         pane: asInt(j['pane']),
         pub: asString(j['pub']),
@@ -1936,6 +2056,9 @@ class PaneRectInfo {
         scrollbar: j['scrollbar'] == null ? null : Rect.fromJson(j['scrollbar']),
         focused: asBool(j['focused']),
         host: asString(j['host']),
+        flag: asString(j['flag']),
+        flagNote: asString(j['flag_note']),
+        flagAtMs: asInt(j['flag_at_ms']),
       );
 
   Map<String, Object?> toJson() => {
@@ -1946,6 +2069,39 @@ class PaneRectInfo {
         if (scrollbar != null) 'scrollbar': scrollbar?.toJson(),
         'focused': focused,
         if (host.isNotEmpty) 'host': host,
+        if (flag.isNotEmpty) 'flag': flag,
+        if (flagNote.isNotEmpty) 'flag_note': flagNote,
+        if (flagAtMs != 0) 'flag_at_ms': flagAtMs,
+      };
+}
+
+/// PaneRespawned reports that a dead pane has a live child again — the inverse
+/// of PaneExited, and the only way a client learns to take the "exited (N)" off
+/// a header it already drew. There is no exit code to carry: the pane is alive.
+///
+/// It exists because a pane's death is remembered by the client, not re-derived:
+/// the chrome a late joiner gets simply omits pane_exited for a live pane, so an
+/// already-connected window needs telling.
+///
+/// Wire type: `pane_respawned`.
+class PaneRespawned {
+  const PaneRespawned({
+    required this.pane,
+  });
+
+  /// The `t` discriminator this class always carries. It is a property of
+  /// the type, not a field: a caller who could set it could set it wrong.
+  static const String type = 'pane_respawned';
+
+  final int pane;
+
+  factory PaneRespawned.fromJson(Map<String, Object?> j) => PaneRespawned(
+        pane: asInt(j['pane']),
+      );
+
+  Map<String, Object?> toJson() => {
+        't': type,
+        'pane': pane,
       };
 }
 
@@ -2035,6 +2191,69 @@ class Raw {
       };
 }
 
+/// Record is the macro recorder's state (runbook.record): whether a recording is
+/// armed, and how much it has captured.
+///
+/// It is a BROADCAST rather than each client's answer to its own status query,
+/// because the recorder is one piece of SESSION state. There is a single
+/// recording at a time and it can be armed or stopped from anywhere the command
+/// vocabulary reaches — this browser, a second window, `catctl record start`, a
+/// plugin, a relayed command from another host. A client that learned the state
+/// only from the commands it issued itself would show the wrong thing the moment
+/// anybody else touched it, and no polling interval makes that reliably right.
+/// Sent on every transition and once in the connect burst, so a window that
+/// reconnects across a stop converges instead of keeping a stale indicator lit.
+///
+/// Steps counts the commands captured SO FAR — completed ones only, the same
+/// number runbook.record status reports. It is on the wire because "armed" and
+/// "armed and actually capturing something" are the two states a recorder can be
+/// in that look identical from outside, and telling them apart before the
+/// recording is stopped is the whole reason status exists.
+///
+/// Wire type: `record`.
+class RecordMsg {
+  const RecordMsg({
+    required this.recording,
+    required this.steps,
+    this.startedAt = '',
+    this.note = '',
+  });
+
+  /// The `t` discriminator this class always carries. It is a property of
+  /// the type, not a field: a caller who could set it could set it wrong.
+  static const String type = 'record';
+
+  final bool recording;
+  final int steps;
+
+  /// StartedAt is RFC3339 and "" when idle. The client shows it as the "since"
+  /// in the recorder's menu; formatting is left to the client because it is the
+  /// side that knows the reader's locale and time zone.
+  final String startedAt;
+
+  /// Note is the recorder's non-error condition — it hit its in-memory ceiling
+  /// and stopped capturing. Carried for the same reason RunbookRecordResult
+  /// carries it: the command that overflowed the recording was run for its own
+  /// sake and must not be failed, so the only way the user finds out is by
+  /// being told.
+  final String note;
+
+  factory RecordMsg.fromJson(Map<String, Object?> j) => RecordMsg(
+        recording: asBool(j['recording']),
+        steps: asInt(j['steps']),
+        startedAt: asString(j['started_at']),
+        note: asString(j['note']),
+      );
+
+  Map<String, Object?> toJson() => {
+        't': type,
+        'recording': recording,
+        'steps': steps,
+        if (startedAt.isNotEmpty) 'started_at': startedAt,
+        if (note.isNotEmpty) 'note': note,
+      };
+}
+
 /// Resize reports the browser window's new grid; the server relayouts (a new
 /// Layout follows) and resizes panes over β.
 ///
@@ -2062,6 +2281,131 @@ class Resize {
         't': type,
         'cols': cols,
         'rows': rows,
+      };
+}
+
+/// RunbookRun is one run in flight.
+class RunbookRun {
+  const RunbookRun({
+    required this.name,
+    this.source = '',
+    this.trigger = '',
+    this.startedAt = '',
+    this.step = 0,
+    this.steps = 0,
+  });
+
+  /// Name is the runbook's declared name, which is also the key the run is
+  /// accounted under — one run per runbook at a time — and therefore the only
+  /// thing a row has to match itself against.
+  final String name;
+
+  /// Source is "control" (somebody asked: a browser, catctl, a plugin) or
+  /// "trigger" (an `on:` clause fired), the same two words RunbookFinishedEvent
+  /// carries. Trigger is the event name that started it, "" when a human did.
+  ///
+  /// They are on the wire because "it is running" and "it started ITSELF" are
+  /// different facts to a reader watching panes appear that they did not ask
+  /// for, and the second is the one that sends them looking at the file.
+  final String source;
+  final String trigger;
+
+  /// StartedAt is RFC3339: when the run took its concurrency slot. For a
+  /// triggered run that is when the trigger fired, a loop turn before the first
+  /// step (see startReservedRunbooks) — close enough that no reader can tell,
+  /// and honest about what the session actually committed to.
+  final String startedAt;
+
+  /// Step is the 1-based index of the step being executed — the same numbering
+  /// RunbookStepResult.Index uses, so "step 4 failed" in a result names the
+  /// step a row was showing. Steps is how many the document has.
+  ///
+  /// Step is 0 for a run that has taken its slot and not yet reached its first
+  /// step, which is a real state a triggered run passes through: the slot is
+  /// taken when the trigger fires and the steps start on the next loop turn.
+  ///
+  /// This is what separates "the session is running something" from "the
+  /// session is running something and it is getting somewhere" — the same
+  /// distinction Record.Steps exists for, and it matters more here, because a
+  /// runbook step can legitimately block for minutes on a build and a mark that
+  /// only blinks cannot tell that apart from a wedge.
+  final int step;
+  final int steps;
+
+  factory RunbookRun.fromJson(Map<String, Object?> j) => RunbookRun(
+        name: asString(j['name']),
+        source: asString(j['source']),
+        trigger: asString(j['trigger']),
+        startedAt: asString(j['started_at']),
+        step: asInt(j['step']),
+        steps: asInt(j['steps']),
+      );
+
+  Map<String, Object?> toJson() => {
+        'name': name,
+        if (source.isNotEmpty) 'source': source,
+        if (trigger.isNotEmpty) 'trigger': trigger,
+        if (startedAt.isNotEmpty) 'started_at': startedAt,
+        if (step != 0) 'step': step,
+        if (steps != 0) 'steps': steps,
+      };
+}
+
+/// RunbookRuns is every runbook run currently in flight, whatever started it —
+/// a browser click here, a click in another window, `catctl runbook deploy`, a
+/// plugin, or an `on:` clause firing by itself.
+///
+/// A BROADCAST, for the reason Record is one: a run is SESSION state. There is
+/// one accounting of runs in flight (cmd/catway/runbooktrigger.go), every start
+/// goes through it and every finish releases it, so a window that learned about
+/// runs only from the commands it issued itself shows a session that is quieter
+/// than the real one. That is the worse direction to be wrong in: the runs a
+/// window did not start are exactly the ones the user has no other way to know
+/// about — a trigger firing is the session acting while nobody is looking at it.
+///
+/// The WHOLE SET rather than start/stop deltas, for two reasons. A set is
+/// idempotent, so a window that reconnects converges on the next message instead
+/// of carrying whatever marks it had when the socket dropped; and a dropped or
+/// coalesced delta would leave a row lit for a run that ended, which is the one
+/// failure a progress mark must not have.
+///
+/// Deliberately NOT a control-API event (internal/app/events.go), and this is
+/// the load-bearing half of the design. Events feed runbook triggers
+/// (fireRunbookTriggers), so an event per run start would hand a runbook an
+/// event that starting a runbook produces — a runbook triggering on it would
+/// trigger on itself. The browser message has no such reach: it marks a row and
+/// stops. `runbook_finished` already exists on the event side for automation
+/// that wants the outcome, and it is emitted once per run, at the end.
+///
+/// It carries per-step progress, but it is NOT a per-step message. A runbook
+/// dispatches its steps as fast as the commands resolve, and a run of inline
+/// ones executes all of them inside a single turn of the orchestrator loop — so
+/// a broadcast per step would be a burst of messages describing positions that
+/// existed for microseconds and were never drawn. Progress is instead marked
+/// dirty and flushed once per loop turn (flushRunbookRuns), which collapses that
+/// burst to one message carrying the position that actually lasted. The edges —
+/// a run starting, a run ending — still send immediately, because those are
+/// transitions rather than progress and there are only ever two of them.
+///
+/// Wire type: `runbook_runs`.
+class RunbookRuns {
+  const RunbookRuns({
+    required this.runs,
+  });
+
+  /// The `t` discriminator this class always carries. It is a property of
+  /// the type, not a field: a caller who could set it could set it wrong.
+  static const String type = 'runbook_runs';
+
+  final List<RunbookRun> runs;
+
+  factory RunbookRuns.fromJson(Map<String, Object?> j) => RunbookRuns(
+        runs: asList(j['runs'], (e) => RunbookRun.fromJson(asObj(e))),
+      );
+
+  Map<String, Object?> toJson() => {
+        't': type,
+        'runs': [for (final e in runs) e.toJson()],
       };
 }
 
@@ -2438,6 +2782,9 @@ class WorkspaceInfo {
     this.agentSummary = '',
     this.locked = false,
     this.host = '',
+    this.flag = '',
+    this.flagNote = '',
+    this.flagAtMs = 0,
   });
 
   /// stable public id, e.g. "w1"
@@ -2455,6 +2802,28 @@ class WorkspaceInfo {
   /// only while more than one host exists — see the hosts message.
   final String host;
 
+  /// Flag is the flag's kind: one of the named kinds ("followup", "star", …)
+  /// or a literal glyph the user chose. Empty means unflagged. Clients render
+  /// it through the same path either way — see internal/flags.
+  final String flag;
+
+  /// FlagNote is the free text pinned alongside it; empty is normal.
+  final String flagNote;
+
+  /// FlagAtMs is when the flag was last set, in Unix milliseconds. Absolute
+  /// rather than an age, because a flag is not re-sent when nothing about it
+  /// changed — a client that wants "flagged 3d ago" subtracts it from its own
+  /// clock and re-renders on its own tick.
+  final int flagAtMs;
+
+  /// The embedded `FlagInfo` block, regrouped. Go's embedding flattens these
+  /// onto the wire; this hands them back as the unit they were declared as.
+  FlagInfo get flagInfo => FlagInfo(
+        flag: flag,
+        flagNote: flagNote,
+        flagAtMs: flagAtMs,
+      );
+
   factory WorkspaceInfo.fromJson(Map<String, Object?> j) => WorkspaceInfo(
         id: asString(j['id']),
         name: asString(j['name']),
@@ -2462,6 +2831,9 @@ class WorkspaceInfo {
         agentSummary: asString(j['agent_summary']),
         locked: asBool(j['locked']),
         host: asString(j['host']),
+        flag: asString(j['flag']),
+        flagNote: asString(j['flag_note']),
+        flagAtMs: asInt(j['flag_at_ms']),
       );
 
   Map<String, Object?> toJson() => {
@@ -2471,6 +2843,9 @@ class WorkspaceInfo {
         if (agentSummary.isNotEmpty) 'agent_summary': agentSummary,
         if (locked) 'locked': locked,
         if (host.isNotEmpty) 'host': host,
+        if (flag.isNotEmpty) 'flag': flag,
+        if (flagNote.isNotEmpty) 'flag_note': flagNote,
+        if (flagAtMs != 0) 'flag_at_ms': flagAtMs,
       };
 }
 
@@ -2501,6 +2876,8 @@ Object? decodeDown(Map<String, Object?> j) {
       return PaneModes.fromJson(j);
     case PaneExited.type:
       return PaneExited.fromJson(j);
+    case PaneRespawned.type:
+      return PaneRespawned.fromJson(j);
     case PaneFrame.type:
       return PaneFrame.fromJson(j);
     case PaneDiff.type:
@@ -2527,6 +2904,10 @@ Object? decodeDown(Map<String, Object?> j) {
       return CmdResult.fromJson(j);
     case History.type:
       return History.fromJson(j);
+    case RecordMsg.type:
+      return RecordMsg.fromJson(j);
+    case RunbookRuns.type:
+      return RunbookRuns.fromJson(j);
     case ChatState.type:
       return ChatState.fromJson(j);
     case ChatSnapshot.type:

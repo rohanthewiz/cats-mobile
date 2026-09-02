@@ -127,6 +127,43 @@ void main() {
       expect(session.exitCodes[4], 130);
     });
 
+    test('a respawned pane stops being an exited one', () {
+      // The death is remembered, never re-derived: a client that only ever adds
+      // to exitCodes would keep drawing "exited (130)" over a live shell for the
+      // rest of the connection, and a reconnect is the only thing that clears it.
+      final session = CatsSession()
+        ..apply(const PaneExited(pane: 4, code: 130))
+        ..apply(const PaneRespawned(pane: 4));
+      expect(session.exitCodes.containsKey(4), isFalse);
+    });
+
+    test('the recorder and the runs in flight are server-authoritative', () {
+      final session = CatsSession();
+      // Null, not idle: a server too old to send `record` sends nothing, and an
+      // unlit indicator would be a claim this client cannot make.
+      expect(session.record, isNull);
+      expect(session.runbookRuns, isEmpty);
+
+      session
+        ..apply(const RecordMsg(recording: true, steps: 3))
+        ..apply(
+          const RunbookRuns(
+            runs: [
+              RunbookRun(name: 'deploy', source: 'control', step: 2, steps: 5),
+            ],
+          ),
+        );
+      expect(session.record!.recording, isTrue);
+      expect(session.record!.steps, 3);
+      expect(session.runbookRuns.single.name, 'deploy');
+      expect(session.runbookRuns.single.step, 2);
+
+      // Replaced wholesale — a finished run is absent from the next push rather
+      // than marked done in it, so folding must not merge with what came before.
+      session.apply(const RunbookRuns(runs: []));
+      expect(session.runbookRuns, isEmpty);
+    });
+
     test('notifications accumulate for the inbox', () {
       final session = CatsSession()
         ..apply(
