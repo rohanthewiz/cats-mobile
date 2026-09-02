@@ -474,3 +474,49 @@ Deviations from the plan, each deliberate:
   failed".
 
 Phase 3 (grmob `TextGrid`) is next and is independent of this package.
+
+## 10. Phase 3 result (2026-09-02): grmob has `core.TextGrid`
+
+Landed in grmob on `master` (uncommitted-to-remote; pin via `replace` in
+phase 4). One node type, four renderer arms, tests on every layer.
+
+**Shape.** `core.TextGrid(rows []core.GridRow, props...)` renders a
+`TextGrid` container with one `GridRow` child per row; a row's runs
+(`GridRun{Text, Fg, Bg, Attr}`, json keys `t fg bg a`) are one prop on that
+child. Attr bits: `GridBold=1, GridDim=2, GridItalic=4, GridUnderline=8,
+GridStrike=16`. Colours are CSS hex strings, "" to inherit the grid's.
+
+**Spike 2 answered.** No `core.Cached` per row is needed: the reconciler
+pairs children by index and compares props with `reflect.DeepEqual`, so an
+unchanged row costs one comparison and no traffic. Measured on an 80×24 grid
+of six-run rows:
+
+| change | patches | bytes |
+|---|---|---|
+| full tree | | 7,430 |
+| 1 row | 1 | 263 |
+| 3 rows | 3 | 787 |
+| 24 rows | 24 | 6,303 |
+
+`reconcile/textgrid_test.go` pins the one-patch-per-row property.
+
+**Renderers.** Compose: `AnnotatedString` of `SpanStyle` runs in
+`FontFamily.Monospace`, `softWrap=false`, horizontal scroll. SwiftUI:
+`AttributedString` in the `.monospaced` design, `lineLimit(1)`, horizontal
+`ScrollView`. WASM and htmlout: `<pre>` of `<div>` rows holding `<span>`
+runs with a shared chassis (`margin:0; line-height:1.2; white-space:pre;
+overflow-x:auto`, rows `min-height:1.2em`). Dim is `opacity:0.6` on the DOM
+targets and a faded colour on the natives.
+
+**Verified here:** grmob `go test ./...`, `wasm/verify/run.sh` (the JS
+runtime through the real file), `mobile/verify` dispatch-arm check on both
+natives, Gradle `compileDebugKotlin`, `swiftc -parse`. **Not verified:** a
+run on a device or simulator; that is phase 5's first walk.
+
+**For phase 4.** Map cats's ratatui modifier bits (`wire.Cell.M`) onto the
+five Grid* bits in the app, swapping fg/bg for reverse video before building
+the run, since grmob has no reverse attribute. Coalesce runs per row from
+`PaneGrid`'s column store (adjacent cells with equal fg/bg/attr become one
+run); the six-run rows measured above are the realistic case. A pane's
+`DirtyRows` is not needed for correctness, only as a cheap skip when
+rebuilding rows.
