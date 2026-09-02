@@ -425,3 +425,52 @@ never be able to forget it.
 Phase 1 is therefore mechanical: move the four files, apply the two renames,
 move four helpers into `internal/app`, point `browserproto`, `app`, catway,
 catctl and catgen-dart at `wire`, run `make check`.
+
+## 9. Phase 2 result (2026-09-02): `internal/catsclient` is ported
+
+`go.mod` pins cats at `c0a250f` (the `wire` carve-out, on branch
+`spike/wire-leaf`) behind a `replace => ../cats`; `coder/websocket v1.8.14` is
+the only other dependency. `go build`, `go vet` and `go test -race` are green
+on the host and the package builds and vets for `GOOS=js GOARCH=wasm`.
+
+| Dart | Go | tests |
+|---|---|---|
+| `endpoint.dart` | `endpoint.go`, `trust.go` | `endpoint_test.go` (sha256 vectors dropped; one FIPS vector pins `crypto/sha256`) |
+| `connection.dart` | `conn.go`, `commands.go`, `backoff.go`, `ws.go`, `dial.go`, `dial_js.go` | `conn_test.go` (includes the "picking a window" half of `views_test.dart`) |
+| `grid.dart` | `grid.go` | `grid_test.go` |
+| `session.dart` | `session.go` | `session_test.go` (includes the fold half of `views_test.dart`) |
+| `viewer_mode_test.dart` | | `viewer_mode_test.go` (go/ast walk of `app/` and `internal/`, test files skipped) |
+| `wire_test.dart` | *(none)* | the codec is cats's own; `wire/proto_test.go` covers it |
+| | | `coverage_test.go`: `TestEveryDownTypeHasAnArm` (§4's mechanical check) |
+
+Deviations from the plan, each deliberate:
+
+- **No `catgen-go` yet**, so `commands.go` is a generic `Call[R]` plus five
+  hand-written helpers (`Capture`, `PaneSendInput`, `PaneWaitForOutput`,
+  `PaneList`, `WorkspaceFocus`). Add one line per command as phase 4 screens
+  need them; replace the file when cats emits it.
+- **`wire.Marshal` still does not stamp `"t"`** (§8's open item). `Conn`
+  stamps it in the handshake and in `Send`, and `TestHandshakeDeclaresNothing`
+  and `TestSendOrdinaryUpMessagesGoThroughStamped` pin that. Still worth fixing
+  in cats.
+- **`Send` refuses `Focus` and `Raw`** as well as `Resize` and `Init`. The
+  server folds every connection's focus into one "is anyone looking" bit that
+  parks a TUI's caret at the desk; a phone in the foreground must not unpark
+  it. `Raw` is the deprecated pre-encoded path.
+- **`Apply` gained arms for `PaneBranch` and `Hosts`** (the Dart codec predated
+  both) and an explicit `ignoredDownTypes` list with reasons: `Welcome`,
+  `CmdResult`, `Clipboard`, `History`, and the five `chat_*` types. The
+  coverage test fails on a type that is neither folded nor listed, and on a
+  listed type the decoder no longer produces.
+- **WASM auth is the cookie route.** `coder/websocket` ignores `HTTPHeader`
+  under `GOOS=js`, so `dial_js.go` dials bare and relies on the session cookie
+  from a prior `POST /login`; `dial.go` (native) sends the bearer header, pins
+  the certificate through `PinnedTLSConfig`, and pings every 20 s. Phase 4's
+  pair screen must do the `/login` fetch before dialing on WASM.
+- **Read limit raised to 16 MiB.** The library's 32 KiB default would drop the
+  first full frame of a 200×60 desktop.
+- **`TrustStore` reports "missing" as `ok == false`, separately from `error`**,
+  so the bytdb store in phase 4 can distinguish "never paired" from "disk
+  failed".
+
+Phase 3 (grmob `TextGrid`) is next and is independent of this package.
