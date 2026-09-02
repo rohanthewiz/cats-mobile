@@ -376,3 +376,52 @@ scripts/build-ios.sh && (cd ../grmob/ios && xcodegen generate && xcodebuild ...)
 During development, before the cats `wire` package is pushed, `go.mod`
 carries `replace github.com/rohanthewiz/cats => ../cats`. Drop the replace
 and pin a real sha before the README claims gate 2 is real.
+
+## 8. Spike 1 result (2026-09-02): `wire` can be a leaf
+
+Done on cats branch `spike/wire-leaf` (uncommitted scratch `wire/` directory,
+throwaway). The answer is yes, and it is smaller than the plan feared.
+
+What the carve-out actually is:
+
+- `internal/browserproto/{proto,up,down}.go` + `internal/app/command_vocab.go`
+  → one package, 3,526 lines. `cmd.go` disappears: it was only aliases of
+  what `command_vocab.go` declares.
+- **Two name collisions**, `WorkspaceInfo` and `TabInfo`: the layout-chrome
+  shape in `down.go` and the `workspace.list`/`tab.list` row in the vocab.
+  catgen-dart already resolves them with a rename table
+  (`cmd/catgen-dart/types.go:86`): the vocab ones become `WorkspaceEntry`
+  and `TabEntry`. Use the same names in Go so the Dart names carry over.
+- `internal/flags` and `internal/layout` are pure leaves (no imports at all,
+  1,160 lines), but `wire` does not need them: the only non-comment uses are
+  **four server-side conversion helpers**, `SplitDirection`, `NavDirection`,
+  `NewFlagInfo`, `optPaneID`. Those stay in `internal/app` (callers:
+  `cmd/catway/catway.go`, `cmd/catctl/subcommands.go`,
+  `internal/browserproto/layout.go`). With them out, the import closure of
+  `wire` is the standard library only.
+- The server-only builders `frame.go` and `layout.go` stay in
+  `internal/browserproto`, which will import `wire`.
+
+Verified:
+
+```
+GOOS=js GOARCH=wasm go build ./wire        OK
+go vet ./wire                               OK
+go list -deps ./wire | grep '\.'            github.com/rohanthewiz/cats/wire   (nothing else)
+go build ./... && go test ./internal/{browserproto,app}   OK (nothing else touched)
+```
+
+And from a throwaway second module with `replace github.com/rohanthewiz/cats
+=> ../cats`, importing only `wire`: builds and runs on the host, builds for
+`GOOS=js GOARCH=wasm`, and pulls **none** of cats's dependencies (no pty, no
+libghostty, no rweb), because Go only loads the packages imported.
+
+One thing to fix in phase 1 rather than the spike: `wire.Marshal(&wire.Init{...})`
+emits `"t":""` unless the caller sets `T` itself. Either `Marshal` should
+stamp the type from the Go type, or `wire` should export constructors
+(`NewInit` alongside the existing `NewWelcome`). The phone's `Connect` must
+never be able to forget it.
+
+Phase 1 is therefore mechanical: move the four files, apply the two renames,
+move four helpers into `internal/app`, point `browserproto`, `app`, catway,
+catctl and catgen-dart at `wire`, run `make check`.
