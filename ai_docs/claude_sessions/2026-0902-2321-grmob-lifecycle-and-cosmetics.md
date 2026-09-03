@@ -84,3 +84,9 @@ Checks run in grmob: `go vet`, `go test ./...`, `wasm/verify/run.sh`,
   kill by pid if so, never `killall`.
 - Row cross axis and native Box still pack (deliberate, plan §14).
 - church needs its own pin bump to v0.2.3 to pick these up.
+
+## Wrap (2026-09-02 2337)
+
+Committed `a07962c` (pin + Resume/Probe) and `6a0f5fd` (this doc, plan
+§14), then pushed cats-mobile main. grmob master and tags v0.2.2/v0.2.3
+were already pushed during the session.
