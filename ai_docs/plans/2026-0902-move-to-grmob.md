@@ -684,8 +684,10 @@ comment pointers (`internal/flags/flags.go`, `internal/app/command_vocab_test.go
 in that checkout (the tidy-exit-countdown one) landed its `be61142`, so the
 two stayed separate commits.
 
-**Still open, deliberately.** `wire` lives on `spike/wire-leaf`, not cats
-main. CI resolves the pinned commit through the proxy today because the
-branch is pushed, but a rebase or branch delete would break every build;
-merging the carve-out into main is the real close of the loop. And
-`wire.Marshal` still does not stamp `"t"` (§8, §9).
+**Closed the same evening.** `spike/wire-leaf` fast-forwarded into cats main
+and pushed (`5add396`); cats-mobile re-pinned to it with the README recipe
+(`go get cats@5add396 && go mod tidy`), and the race suite stayed green, so
+the wire changes that rode along (`pane.keep`, the exit-countdown fields)
+added no down type `session.go` lacks an arm for. The spike branch still
+exists on origin; safe to delete. Still open: `wire.Marshal` does not stamp
+`"t"` (§8, §9).
