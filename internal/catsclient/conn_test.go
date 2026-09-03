@@ -34,7 +34,7 @@ func TestHandshakeDeclaresNothing(t *testing.T) {
 	}
 	init := socket.sentAt(0)
 	if init["t"] != "init" {
-		t.Errorf("t = %v; the discriminator must be stamped, wire.Marshal does not do it", init["t"])
+		t.Errorf("t = %v; the discriminator must be stamped; wire.Marshal does it from the Go type", init["t"])
 	}
 	if init["v"] != float64(wire.ProtocolVersion) {
 		t.Errorf("v = %v", init["v"])
@@ -162,7 +162,7 @@ func TestSendOrdinaryUpMessagesGoThroughStamped(t *testing.T) {
 	}
 	last := socket.last()
 	if last["t"] != "key" {
-		t.Errorf("t = %v; the discriminator is stamped even when the caller left it empty", last["t"])
+		t.Errorf("t = %v; wire.Marshal stamps the discriminator when the caller leaves it empty", last["t"])
 	}
 	if last["pane"] != float64(3) {
 		t.Errorf("pane = %v", last["pane"])

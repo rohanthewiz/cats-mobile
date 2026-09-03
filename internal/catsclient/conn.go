@@ -221,8 +221,8 @@ func (c *Conn) Endpoint() Endpoint { return c.endpoint }
 // window instead of flicking to the desk's for a frame; FollowWorkspace is
 // the live half.
 func (c *Conn) handshake() {
+	// No T: wire.Marshal stamps "t" from the Go type.
 	init := wire.Init{
-		T:         wire.MsgInit,
 		V:         wire.ProtocolVersion,
 		Cols:      0,
 		Rows:      0,
@@ -444,8 +444,9 @@ func (c *Conn) requireWindowCap(ctx context.Context, what string) error {
 }
 
 // Send sends one up-message: a wire.Key, Mouse, Paste, Image or Cmd, by value
-// or by pointer. The "t" discriminator is stamped here, so a caller cannot
-// send a message the server would drop as untyped.
+// or by pointer. The "t" discriminator is wire.Marshal's job (it stamps from
+// the Go type), so a caller cannot send a message the server would drop as
+// untyped, and this method has nothing to fill in.
 //
 // Refuses Resize regardless of what the caller intended (see the type doc),
 // and a second Init, because the handshake is this type's to build. Focus and
@@ -458,60 +459,36 @@ func (c *Conn) Send(msg any) error {
 	if c.IsClosed() {
 		return &DisconnectedError{Command: "<send>"}
 	}
-	stamped, err := stampUp(msg)
-	if err != nil {
+	if err := allowUp(msg); err != nil {
 		return err
 	}
-	raw, err := wire.Marshal(stamped)
+	raw, err := wire.Marshal(msg)
 	if err != nil {
 		return err
 	}
 	return c.socket.Send(string(raw))
 }
 
-// stampUp applies the viewer allowlist and returns a pointer to the message
-// with its type discriminator set.
-func stampUp(msg any) (any, error) {
-	switch m := msg.(type) {
+// allowUp is the viewer allowlist: nil for a message a viewer may send, a
+// ViewerModeViolation for the ones the type doc forbids, and a plain error
+// for anything that is not an up-message at all.
+func allowUp(msg any) error {
+	switch msg.(type) {
 	case *wire.Resize, wire.Resize:
 		// Naming the type here is the ONLY use of Resize in this module, and it
 		// exists to refuse it. viewer_mode_test.go looks for composite
 		// literals, which this is not.
-		return nil, &ViewerModeViolation{What: "resize"}
+		return &ViewerModeViolation{What: "resize"}
 	case *wire.Init, wire.Init:
-		return nil, &ViewerModeViolation{What: "a second init (the handshake is ours to build)"}
-	case *wire.Key:
-		m.T = wire.MsgKey
-		return m, nil
-	case wire.Key:
-		m.T = wire.MsgKey
-		return &m, nil
-	case *wire.Mouse:
-		m.T = wire.MsgMouse
-		return m, nil
-	case wire.Mouse:
-		m.T = wire.MsgMouse
-		return &m, nil
-	case *wire.Paste:
-		m.T = wire.MsgPaste
-		return m, nil
-	case wire.Paste:
-		m.T = wire.MsgPaste
-		return &m, nil
-	case *wire.Image:
-		m.T = wire.MsgImage
-		return m, nil
-	case wire.Image:
-		m.T = wire.MsgImage
-		return &m, nil
-	case *wire.Cmd:
-		m.T = wire.MsgCmd
-		return m, nil
-	case wire.Cmd:
-		m.T = wire.MsgCmd
-		return &m, nil
+		return &ViewerModeViolation{What: "a second init (the handshake is ours to build)"}
+	case *wire.Key, wire.Key,
+		*wire.Mouse, wire.Mouse,
+		*wire.Paste, wire.Paste,
+		*wire.Image, wire.Image,
+		*wire.Cmd, wire.Cmd:
+		return nil
 	}
-	return nil, fmt.Errorf("catsclient: not an up-message a viewer sends: %T", msg)
+	return fmt.Errorf("catsclient: not an up-message a viewer sends: %T", msg)
 }
 
 // Invoke sends one command and blocks for its reply, returning the reply's
