@@ -688,6 +688,12 @@ two stayed separate commits.
 and pushed (`5add396`); cats-mobile re-pinned to it with the README recipe
 (`go get cats@5add396 && go mod tidy`), and the race suite stayed green, so
 the wire changes that rode along (`pane.keep`, the exit-countdown fields)
-added no down type `session.go` lacks an arm for. The spike branch still
-exists on origin; safe to delete. Still open: `wire.Marshal` does not stamp
-`"t"` (§8, §9).
+added no down type `session.go` lacks an arm for. The spike branch was then
+deleted locally and on origin.
+
+**§8's `"t"` item closed (2026-09-02, cats `d58ce46`).** `wire.Marshal` now
+stamps `"t"` from the Go type via a `msgTypes` table, on a copy so the
+caller's value is untouched, and refuses a contradicting `T` with
+`ErrTypeMismatch`. `TestMarshalStampsEveryType` pins the table against both
+decoders. cats-mobile is pinned at `d58ce46`; `conn.go`'s handshake no longer
+sets `T` and `stampUp` became `allowUp`, the viewer allowlist alone.
