@@ -591,3 +591,61 @@ wired through `ui.action` but untested against a live server; the More
 screen's usage line assumes `UsageWindow.Pct` is a percentage; no
 foreground/background lifecycle hook yet (grmob gap noted in its ROADMAP),
 so a backgrounded phone reconnects only when the socket dies.
+
+## 12. Phase 5 result (2026-09-02): the app on Android and iOS
+
+Both native shells run the app end to end against a live catway: pair
+(host/port/password), roster, open a pane, TextGrid frame with colours,
+diffs landing, reply through `pane.send_input` (draft clears on the ok),
+notification buttons answering through `ui.action`, Forget this device,
+and a reconnect after the network drops (the strip shows the last known
+state, then the socket comes back on its own). iOS was driven by a
+throwaway XCUITest in grmob's UI-test target (deleted afterwards) because
+the simulator has no `adb shell input`; Android by adb.
+
+**Build.** `scripts/build-android.sh [--apk|--install]` and
+`scripts/build-ios.sh [--sim]` bind `grmob/mobile` + `./app` from this
+module into grmob's shells; `scripts/lib.sh` warns when the grmob checkout
+holding the Kotlin/Swift half is not at the tag go.mod builds against.
+go.mod pins grmob **v0.2.1** (no replace) and a `tool` block pins
+x/mobile so `gomobile bind` runs from here.
+
+**Three upstream fixes the walk needed.**
+
+- **grmob v0.2.1** — a FlexGrow child of a Scroll collapsed to zero height
+  on Android (Compose resolves `weight` to nothing under an unbounded
+  scroll), which blanked every `Screen{Fill, Scroll}`. Scroll is now a
+  `BoxWithConstraints` measuring the viewport and handing a grow child
+  `heightIn(min = viewport)`.
+- **rweb v0.1.28 in cats** — v0.1.26 matched request headers by exact or
+  all-lowercase key; Go's `net/http` sends `Sec-Websocket-Key`, so catway
+  refused every upgrade from a Go client with "connection not upgraded to
+  websocket". Browsers and Dart never hit it.
+- **cats-mobile** — `Endpoint.Label()` (host:port) replaces `String()` in
+  the UI; the pane screen is `KeyboardAware` so the composer rides above
+  the keyboard; an answered notification drops its buttons at once
+  (`Session.AnswerNotify` through the new `Connection.Update` write path,
+  since catway sends no dismissal).
+
+**Findings worth keeping.**
+
+- The roster is catway's rollup of panes whose foreground process is a
+  known agent, by name (`internal/detect`). A script called `claude` on
+  PATH lands on the roster, which is how the walk exercised pane views
+  without spending real usage.
+- Restarting catway (or changing its state dir) invalidates the phone's
+  session: the HMAC is per process. The app handles it as designed (401 →
+  hard stop → "Your session has expired. Pair again from More.").
+- Windows → follow was not exercised: it needs a desktop window, which
+  means signing into the desk from a browser or catapp. Left for a manual
+  pass.
+- No lifecycle hook yet (grmob ROADMAP): only a dead socket triggers a
+  reconnect, so a long-backgrounded phone reconnects on its first failed
+  write, not on foreground.
+
+**Cosmetic, both platforms, all grmob-wide (church has them too).** Inputs
+and buttons size to content rather than stretching (Column default is not
+stretch); the status-bar strip stays light because Screen paints the
+background below the SafeArea inset; on iOS the Fill+Scroll column stops
+short of the bottom (the SwiftUI cousin of the Android collapse, milder);
+the confirm dialog on Android has a white frame around its dark body.
