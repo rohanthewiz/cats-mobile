@@ -113,3 +113,10 @@ were already pushed during the session.
   `adb shell input`; the fields did not move when the keyboard opened, so
   the pre-keyboard tap coordinates stayed valid.
 - Not checked by eye: the iOS confirm dialog (`presentationBackground`).
+
+## Wrap 2 (2026-09-02 2355)
+
+Walk committed as `a07e748` (pin to grmob v0.2.4, plan §14, this doc) and
+pushed. grmob master and tag v0.2.4 pushed during the walk. Still running:
+emulator-5554, the iPhone 17 Pro simulator, and the phase-5 catway on
+:8421 (kill by pid, never `killall`).
