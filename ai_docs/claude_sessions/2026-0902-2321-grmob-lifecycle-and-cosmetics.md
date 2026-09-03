@@ -90,3 +90,26 @@ Checks run in grmob: `go vet`, `go test ./...`, `wasm/verify/run.sh`,
 Committed `a07962c` (pin + Resume/Probe) and `6a0f5fd` (this doc, plan
 §14), then pushed cats-mobile main. grmob master and tags v0.2.2/v0.2.3
 were already pushed during the session.
+
+## Walk (2026-09-02, after the wrap)
+
+> walk the emulator and simulator to check the cosmetic fixes
+
+- Android via `scripts/build-android.sh --install` + adb taps and
+  `screencap`; iOS via `scripts/build-ios.sh --sim` + `simctl install`
+  /`launch`/`io booted screenshot`. The catway on :8421 from phase 5 was
+  still up, so Android was still paired; iOS was reinstalled
+  (`simctl uninstall`) to reach the pair screen, since no tap tool works
+  on this simulator (no idb/cliclick; System Events sees zero Simulator
+  windows; `screencapture` cannot grab the display).
+- Confirmed: dark status-bar strip (both), inputs full width (both), iOS
+  Fill+Scroll paints to the bottom, Android dialog has no white frame.
+- Found and fixed as **grmob v0.2.4** (`05e3b65`, pushed; pinned here):
+  Android bar icons dark-on-dark → SafeArea sets
+  `isAppearanceLightStatusBars`/`NavigationBars` from its background's
+  luminance (`SystemBarIcons` in Renderer.kt); iOS `hugsContent` no longer
+  treats a percentage Width as a hug, so `Button{FullWidth}` fills.
+- Android was re-paired by typing `10.0.2.2` / `8421` / `changeme` with
+  `adb shell input`; the fields did not move when the keyboard opened, so
+  the pre-keyboard tap coordinates stayed valid.
+- Not checked by eye: the iOS confirm dialog (`presentationBackground`).

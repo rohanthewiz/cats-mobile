@@ -763,9 +763,22 @@ alone. No app change — `confirmDialog`'s column already carries
 `Colors.Surface`; on iOS that colour becomes the sheet's
 `presentationBackground`.
 
+**Walked (2026-09-02, later the same evening) → grmob v0.2.4.** Emulator
+and simulator, against the still-running catway on :8421. Confirmed by
+eye: the status-bar strip is dark on both; the pair screen's inputs run
+full width on both and its background reaches the bottom on iOS; the
+Android "Forget this device?" dialog is one dark surface. Two things the
+walk found, fixed in **v0.2.4** (`05e3b65`), which this repo now pins:
+Android's status-bar icons had gone dark-on-dark (edge-to-edge picks the
+icon colour from the system theme, so the SafeArea now sets the window's
+bar appearance from its own background's luminance), and iOS's
+`hugsContent` treated `Width("100%")` — Button's FullWidth — as a hug, so
+the Pair button stayed label-wide; a percentage is now proposed the
+parent's extent. The iOS dialog was not checked by eye: the simulator has
+no scriptable taps here (no idb/cliclick, and System Events sees no
+Simulator window), so iOS was driven by reinstalling to reach the pair
+screen.
+
 **Not done, deliberately.** Row's cross axis still packs (see above). Box
 on the natives does not stretch either, though on the web it is a flex
-column; nothing in this app depends on it. The walk with the emulator and
-simulator that would confirm the four cosmetic fixes by eye has not been
-repeated — the shells compile against the pin and the Go/WASM/Swift-typecheck
-suites are green, but the pictures are still owed.
+column; nothing in this app depends on it.
