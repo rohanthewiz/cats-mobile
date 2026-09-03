@@ -408,3 +408,22 @@ func groupRank(item wire.AgentItem) int {
 		return 4
 	}
 }
+
+// AnswerNotify forgets the buttons on the notification with the given id.
+//
+// catway drops an answered notification from its registry but sends no
+// dismissal message (a failed ui.action is how another client finds out), so
+// the phone that answered is the only one that knows at once. Clearing the
+// actions locally is what turns "Yes / No" back into a plain history row
+// instead of leaving buttons that would only ever be refused by name. The
+// row itself stays: it is history, and the answer is part of it.
+func (s *Session) AnswerNotify(id string) {
+	if id == "" {
+		return
+	}
+	for i := range s.Notifications {
+		if s.Notifications[i].ID == id {
+			s.Notifications[i].Actions = nil
+		}
+	}
+}

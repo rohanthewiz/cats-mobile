@@ -112,7 +112,7 @@ func connectionBanner(ctx *core.Context, conn *Connection) core.View {
 	case StatusConnected:
 		return nil
 	case StatusConnecting:
-		return noticeStrip(ctx, "Connecting to "+info.Endpoint.String()+"…", "", nil)
+		return noticeStrip(ctx, "Connecting to "+info.Endpoint.Label()+"…", "", nil)
 	case StatusReconnecting:
 		return noticeStrip(ctx, "Reconnecting… showing the last known state", "Retry", conn.Retry)
 	case StatusCertMismatch:

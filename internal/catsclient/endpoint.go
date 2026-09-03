@@ -168,6 +168,15 @@ func (e Endpoint) WithPin(fingerprint string) Endpoint {
 	return e
 }
 
+// Label is the endpoint as a person would name it: host:port. It is the form
+// the UI shows wherever it names a desk (the More screen, the connecting
+// strip). String below is the debugging form, with the ID and kind, and is
+// what a log line wants; the two are separate so a change to either does
+// not leak into the other.
+func (e Endpoint) Label() string {
+	return e.hostPort()
+}
+
 func (e Endpoint) String() string {
 	s := "Endpoint(" + e.ID + ", " + e.Kind.String()
 	if e.TLS {

@@ -136,6 +136,12 @@ func notifyRow(ctx *core.Context, index int, n wire.Notify) core.View {
 				go runCommand("answer "+label, func(c *catsclient.Conn) error {
 					_, err := catsclient.Call[struct{}](context.Background(), c, wire.CmdUIAction,
 						wire.UIActionParams{ID: id, Action: action})
+					if err == nil {
+						// Accepted: the buttons are spent everywhere now, and
+						// this phone is the one client that knows without a
+						// round trip. See Session.AnswerNotify.
+						Get().Conn.Update(func(s *catsclient.Session) { s.AnswerNotify(id) })
+					}
 					return err
 				})
 			},

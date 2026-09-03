@@ -381,6 +381,17 @@ func (c *Connection) Read(fn func(s *catsclient.Session)) {
 	fn(c.session)
 }
 
+// Update runs fn with the session under the lock and then triggers a render,
+// for the few places the phone changes what it knows without a message from
+// the wire (an answered notification, say). Same rules as Read: fn must not
+// block and must not call back into Connection.
+func (c *Connection) Update(fn func(s *catsclient.Session)) {
+	c.mu.Lock()
+	fn(c.session)
+	c.mu.Unlock()
+	c.notify()
+}
+
 // Info is a snapshot of the connection's state for a render pass.
 type Info struct {
 	Status   Status

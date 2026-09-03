@@ -47,7 +47,7 @@ func moreScreen(ctx *core.Context) core.View {
 
 	items = append(items, sectionHeader(ctx, "CONNECTION"))
 	items = append(items, contentRow(ctx, statusGlyph(info.Status), info.Status.String(),
-		joinNonEmpty(bullet, info.Endpoint.String(), errText(info.Err)), nil,
+		joinNonEmpty(bullet, info.Endpoint.Label(), errText(info.Err)), nil,
 		components.Button{Label: "Retry", Emphasis: components.EmphasisGhost, OnTap: conn.Retry,
 			Style: []core.StyleProp{core.FontSize(13)}}))
 	if info.Status == StatusConnected {
@@ -83,12 +83,12 @@ func moreScreen(ctx *core.Context) core.View {
 				conn.Connect(endpoint)
 			}
 		}
-		items = append(items, core.Keyed("ep:"+e.ID, contentRow(ctx, "🖥", e.String(),
+		items = append(items, core.Keyed("ep:"+e.ID, contentRow(ctx, "🖥", e.Label(),
 			joinNonEmpty(bullet, e.Kind.String(), "pin "+shortFingerprint(e.PinnedSHA256)), onTap, trailing)))
 	}
 	items = append(items,
 		contentRow(ctx, "➕", "Pair another desk", "", func() { core.Push(ctx, pairScreen) }, nil),
-		contentRow(ctx, "🗑", "Forget this device", "Clears the session and certificate pin for "+active.String(),
+		contentRow(ctx, "🗑", "Forget this device", "Clears the session and certificate pin for "+active.Label(),
 			func() { confirm.Set(confirmForget) }, nil),
 	)
 

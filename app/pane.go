@@ -168,6 +168,11 @@ func paneScreen(pane uint32, pub string) func(*core.Context) core.View {
 			core.PaddingHorizontal(0),
 			core.PaddingVertical(0),
 			core.FlexGrow(1),
+			// The composer is docked below the scrolling grid, outside it, so it
+			// is exactly the thing a software keyboard would cover. Lifting the
+			// whole column keeps the reply bar in view while typing; the grid
+			// above it shrinks, which is what a chat-shaped screen wants.
+			core.KeyboardAware(),
 			core.BackgroundColor(theme.Colors.Background),
 			screenHeader(ctx, title,
 				headerAction("👁", "Reveal this pane at the desk", func() {
