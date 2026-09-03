@@ -3,6 +3,7 @@ package catsclient
 import (
 	"context"
 	"errors"
+	"io"
 	"math/rand/v2"
 	"sync"
 	"testing"
@@ -595,5 +596,57 @@ func TestFollowRefusesAServerWithoutTheWindowCapability(t *testing.T) {
 	}
 	if !conn.FollowsPrimaryView() {
 		t.Error("the pin should be untouched")
+	}
+}
+
+// --- probe ---------------------------------------------------------------------
+
+// pinging is a fakeSocket that also answers pings, standing in for the
+// native WebSocket; the bare fakeSocket stands in for the browser's, which
+// cannot ping.
+type pinging struct {
+	*fakeSocket
+	err error
+}
+
+func (p *pinging) Ping(context.Context) error { return p.err }
+
+func TestProbeFailsTheConnectionOnlyWhenThePingDoes(t *testing.T) {
+	// A transport without Pinger has nothing to report and stays open.
+	plain := newFakeSocket()
+	c := newTestConn(t, plain, Options{})
+	if err := c.Probe(context.Background()); err != nil {
+		t.Fatalf("probe over a non-pinging socket: %v", err)
+	}
+	if c.IsClosed() {
+		t.Fatal("probe closed a socket it could not ping")
+	}
+
+	// A healthy ping leaves the connection alone.
+	healthy := &pinging{fakeSocket: newFakeSocket()}
+	c = New(healthy, Options{Endpoint: testEndpoint})
+	t.Cleanup(func() { _ = c.Close() })
+	if err := c.Probe(context.Background()); err != nil || c.IsClosed() {
+		t.Fatalf("healthy probe: err=%v closed=%v", err, c.IsClosed())
+	}
+
+	// A failed ping fails the connection: Done fires so a reconnect loop
+	// redials, and the error names the probe with the transport's cause.
+	dead := &pinging{fakeSocket: newFakeSocket(), err: io.ErrUnexpectedEOF}
+	c = New(dead, Options{Endpoint: testEndpoint})
+	err := c.Probe(context.Background())
+	var disc *DisconnectedError
+	if !errors.As(err, &disc) || disc.Command != "<probe>" || !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("dead probe returned %v", err)
+	}
+	select {
+	case <-c.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("Done did not fire after a failed probe")
+	}
+	// A second probe on the closed connection reports why it closed, and
+	// does not ping again.
+	if err := c.Probe(context.Background()); !errors.As(err, &disc) {
+		t.Errorf("probe after close returned %v", err)
 	}
 }

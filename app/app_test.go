@@ -32,6 +32,11 @@ type fakeSocket struct {
 	once sync.Once
 	mu   sync.Mutex
 	sent []map[string]any
+	// pingErr is what Ping answers; nil is a healthy socket. Set by
+	// failPings to stand in for a socket the OS severed while the phone was
+	// in a pocket: nothing has errored from this side yet, and only a probe
+	// finds out.
+	pingErr error
 }
 
 func newFakeSocket() *fakeSocket { return &fakeSocket{in: make(chan string, 64)} }
@@ -62,6 +67,23 @@ func (s *fakeSocket) Close() error {
 
 // drop simulates the network going away under the connection.
 func (s *fakeSocket) drop() { _ = s.Close() }
+
+// Ping implements catsclient.Pinger so the app's resume probe has something
+// to ask; see pingErr.
+func (s *fakeSocket) Ping(context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pingErr
+}
+
+// failPings makes the socket look severed to a probe while Recv still
+// blocks, which is exactly the half-open state a backgrounded phone comes
+// back to.
+func (s *fakeSocket) failPings() {
+	s.mu.Lock()
+	s.pingErr = io.ErrUnexpectedEOF
+	s.mu.Unlock()
+}
 
 func (s *fakeSocket) deliver(m map[string]any) {
 	raw, _ := json.Marshal(m)
@@ -202,6 +224,9 @@ func resetServicesForTest(t *testing.T) (*fakeDesk, *store.Store) {
 
 	t.Cleanup(func() {
 		services.Conn.Disconnect()
+		if services.stopLifecycle != nil {
+			services.stopLifecycle()
+		}
 		servicesOnce = sync.Once{}
 		services = nil
 		store.Close()
@@ -711,5 +736,43 @@ func TestFollowSurvivesASocketDrop(t *testing.T) {
 	}
 	if init[0]["workspace"] != "w2" {
 		t.Errorf("redial init lost the follow pin: %v", init[0])
+	}
+}
+
+// The foreground transition finds a severed socket at once. Nothing has
+// failed from the phone's side — Recv is still blocked, the keep-alive has
+// not ticked — so only the probe Resume sends can tell, and it has to fail
+// the connection so the loop redials with a fresh handshake. This runs the
+// whole chain: core's lifecycle record → Services.Bind's subscription →
+// Connection.Resume → Conn.Probe → the socket's Ping → the reconnect loop.
+func TestForegroundProbesTheSocketAndRedials(t *testing.T) {
+	t.Cleanup(func() { core.ReceiveLifecycle(core.LifecycleActive) })
+	h := newHarness(t, true)
+	s1 := h.connect()
+	h.waitFor("claude-opus-5")
+
+	// A healthy socket survives a foreground: no redial, no banner.
+	core.ReceiveLifecycle(core.LifecycleBackground)
+	core.ReceiveLifecycle(core.LifecycleActive)
+	time.Sleep(50 * time.Millisecond)
+	if n := h.desk.dials(); n != 1 {
+		t.Fatalf("a healthy socket was redialled: %d dials", n)
+	}
+
+	// The phone goes away; the OS severs the socket without a word.
+	core.ReceiveLifecycle(core.LifecycleBackground)
+	s1.failPings()
+	core.ReceiveLifecycle(core.LifecycleActive)
+
+	h.waitFor("Reconnecting")
+	s2 := h.desk.socket(t, 1)
+	s2.deliver(welcome(wire.CapViewer, wire.CapWindow))
+	s2.deliver(agentsRollup())
+	h.waitFor("claude-opus-5")
+	if n := len(s2.sentNamed("init")); n != 1 {
+		t.Errorf("the second socket got %d init messages", n)
+	}
+	if shows(h.html(), "Reconnecting") {
+		t.Errorf("banner still up after the resume redial")
 	}
 }

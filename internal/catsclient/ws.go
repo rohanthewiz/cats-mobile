@@ -72,6 +72,14 @@ func (s *WSSocket) keepAlive(interval time.Duration) {
 	}
 }
 
+// Ping implements Pinger over the library's control-frame ping: it returns
+// when the peer's pong arrives, or with an error once ctx expires or the
+// socket is closed. Conn.Probe calls it on the foreground transition; the
+// keep-alive ticker above is the other caller, through the library directly.
+func (s *WSSocket) Ping(ctx context.Context) error {
+	return s.conn.Ping(ctx)
+}
+
 // Recv returns the next text frame. Binary frames are reserved for a future
 // packed encoding behind a version bump, so one arriving now is skipped
 // rather than surfaced as an empty message.

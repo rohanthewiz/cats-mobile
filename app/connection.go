@@ -193,6 +193,59 @@ func (c *Connection) Retry() {
 	}
 }
 
+// Resume is the foreground transition: the app is back on screen after
+// some time away, and whatever the socket was doing while the phone sat in
+// a pocket is suspect. It is the reason the lifecycle event exists (plan
+// §12: a long-backgrounded phone used to reconnect on its first failed
+// write, not on foreground). Called from Services.Bind's lifecycle
+// subscription; safe from any goroutine and never blocks the caller.
+//
+// What it does depends on where the loop is:
+//
+//   - Reconnecting: the loop is asleep in its backoff, possibly for the full
+//     30 s ceiling after an hour of failed dials in the background. Wake it,
+//     so the first dial happens now — the same nudge Retry gives, minus the
+//     restart of a hard-stopped loop, which is the user's call and stays
+//     behind the button.
+//   - Connected: probe the socket. The OS may have severed it without a
+//     word; the probe fails the Conn if so, Done fires, and the loop redials
+//     from the bottom of its ladder. Bounded so a socket that is merely slow
+//     to answer is treated as dead — for a probe, a fast wrong answer beats
+//     a slow right one, and a healthy socket answers in one round trip.
+//   - Anything else (idle, a hard stop, mid-dial): nothing to do. A dial in
+//     flight already is the reconnect.
+func (c *Connection) Resume() {
+	c.mu.Lock()
+	status := c.status
+	conn := c.conn
+	c.mu.Unlock()
+
+	switch status {
+	case StatusReconnecting:
+		select {
+		case c.wake <- struct{}{}:
+		default:
+		}
+	case StatusConnected:
+		if conn == nil {
+			return
+		}
+		// Off the caller's goroutine: the lifecycle event is delivered on
+		// the bridge's serial executor, and a ping round trip there would
+		// hold up every tap behind it.
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+			defer cancel()
+			_ = conn.Probe(ctx)
+		}()
+	}
+}
+
+// probeTimeout bounds the resume probe. Long enough for a cellular round
+// trip after a radio wake-up, short enough that a dead socket is replaced
+// before the user has finished reading the screen.
+const probeTimeout = 5 * time.Second
+
 // run is one generation of the reconnect loop. It returns when ctx is
 // cancelled or on a hard stop (certificate mismatch, refused credential,
 // protocol mismatch); every other failure walks the backoff ladder.

@@ -6,6 +6,7 @@ import (
 
 	"github.com/rohanthewiz/cats-mobile/internal/catsclient"
 	"github.com/rohanthewiz/cats-mobile/internal/store"
+	"github.com/rohanthewiz/grmob/core"
 )
 
 // Services holds the app's long-lived objects: the persistence store and the
@@ -28,6 +29,12 @@ type Services struct {
 	Conn  *Connection
 
 	bootOnce sync.Once
+	// stopLifecycle cancels Bind's core.OnLifecycle subscription. The
+	// subscription is process-wide and the app never needs it gone, but a
+	// test binary builds many Services in one process and each one's
+	// subscription would otherwise outlive it, resuming a connection whose
+	// test has finished.
+	stopLifecycle func()
 }
 
 var (
@@ -63,6 +70,18 @@ func newServices(st *store.Store, dialer Dialer) *Services {
 func (s *Services) Bind(ctx interface{ RequestRender() }) {
 	s.bootOnce.Do(func() {
 		s.Conn.SetNotify(ctx.RequestRender)
+		// Foreground → Resume. Subscribed here rather than in a component
+		// because the connection outlives every screen, and because
+		// core.OnLifecycle is process-wide: a component would have to guard
+		// against subscribing on every render, and this runs once. Only the
+		// active transition matters — there is nothing to do on the way
+		// out, the socket is left to the OS — so the other two states are
+		// ignored rather than mapped to anything.
+		s.stopLifecycle = core.OnLifecycle(func(state core.LifecycleState) {
+			if state == core.LifecycleActive {
+				s.Conn.Resume()
+			}
+		})
 		if endpoint, ok := s.Store.Active(); ok {
 			s.Conn.Connect(endpoint)
 		}

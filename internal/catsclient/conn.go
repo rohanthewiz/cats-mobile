@@ -28,6 +28,17 @@ type Socket interface {
 	Close() error
 }
 
+// Pinger is the optional half of Socket a transport implements when it can
+// ask the far side whether it is still there. The native WebSocket does; the
+// browser one cannot (the page's network stack answers pings itself and
+// exposes no way to send one). Conn.Probe uses it when present and reports
+// nothing otherwise, so a caller never has to know which transport it has.
+type Pinger interface {
+	// Ping round-trips a control frame and returns once the peer answered,
+	// or with an error when the socket is dead or ctx expires first.
+	Ping(ctx context.Context) error
+}
+
 // CommandError is a command that came back ok: false.
 type CommandError struct {
 	Command string
@@ -605,6 +616,43 @@ func (c *Conn) Err() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.closeErr
+}
+
+// Probe asks whether the socket is still alive and, when it is not, fails
+// the connection so Done fires and a reconnect loop redials at once.
+//
+// It exists for the foreground transition. A phone that spent an hour in
+// the background usually comes back with a socket the OS quietly severed:
+// nothing has failed yet from this side, the keep-alive will notice within
+// its interval, and the first user action would notice sooner — as a
+// spinner. Probing on resume moves that discovery to the moment the screen
+// lights up. The ping is bounded by ctx; a socket that cannot answer within
+// it is treated as dead, which is the right call for a probe whose whole
+// point is speed (a healthy socket answers a ping in one round trip).
+//
+// A transport without Pinger — the browser's — reports nil, because the
+// page's own stack keeps the socket honest and there is nothing to add. A
+// connection already closed reports its Err.
+func (c *Conn) Probe(ctx context.Context) error {
+	c.mu.Lock()
+	closed, closeErr := c.closed, c.closeErr
+	c.mu.Unlock()
+	if closed {
+		return closeErr
+	}
+	p, ok := c.socket.(Pinger)
+	if !ok {
+		return nil
+	}
+	if err := p.Ping(ctx); err != nil {
+		// Close rather than fail alone: the reader is blocked in Recv on a
+		// socket that will never deliver, and closing the socket is what
+		// unblocks it. Close is idempotent with a reader that has since
+		// exited on its own.
+		_ = c.Close()
+		return &DisconnectedError{Command: "<probe>", Cause: err}
+	}
+	return nil
 }
 
 // Close fails every pending call, closes the socket and waits for the reader
