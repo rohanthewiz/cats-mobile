@@ -56,6 +56,12 @@ func windowsScreen(ctx *core.Context) core.View {
 	live := conn.Live()
 	canFollow := live != nil && live.HasCap(wire.CapWindow)
 	following := live != nil && !live.FollowsPrimaryView()
+	// The "not supported" notice is a statement about the server, so it needs
+	// a server to have said so. While the socket is down there is no live
+	// connection to ask, and the answer is "not right now", which the
+	// reconnect banner already says; blaming the desk's version for it would
+	// be wrong and alarming.
+	unsupported := live != nil && !canFollow
 
 	items := []core.PropsAndChildren{
 		core.Row(
@@ -64,7 +70,7 @@ func windowsScreen(ctx *core.Context) core.View {
 			mutedText(ctx, censusLine(census, viewers, followed)),
 		),
 	}
-	if !canFollow {
+	if unsupported {
 		items = append(items, noticeStrip(ctx,
 			"This desk's server does not support per-window following; the phone shows the primary view.", "", nil))
 	}

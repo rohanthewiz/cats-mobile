@@ -656,3 +656,60 @@ func TestTypedInputPersistsAcrossKeystrokes(t *testing.T) {
 		t.Fatalf("a keystroke in one field disturbed another:\n%s", out)
 	}
 }
+
+// A follow is a property of the phone's view, not of one socket. When the
+// socket drops, the redial's Init must name the same workspace, or a phone
+// watching a side window jumps back to the primary view on every network
+// blip. The pin is only carried once the server has acknowledged it.
+func TestFollowSurvivesASocketDrop(t *testing.T) {
+	h := newHarness(t, true)
+	s1 := h.connect()
+	s1.deliver(map[string]any{"t": "clients", "total": 3, "sizers": 2, "cols": 200, "rows": 60, "views": []any{
+		map[string]any{"workspace": "w1", "cols": 200, "rows": 60, "focused": true, "primary": true},
+		map[string]any{"workspace": "w2", "cols": 120, "rows": 40},
+		map[string]any{"workspace": "w1", "viewer": true},
+	}})
+	s1.deliver(map[string]any{"t": "layout", "workspaces": []any{
+		map[string]any{"id": "w1", "name": "cats", "active": true},
+		map[string]any{"id": "w2", "name": "grmob"},
+	}, "tabs": []any{}, "panes": []any{}, "borders": []any{}})
+	h.waitFor("claude-opus-5")
+	if init := s1.sentNamed("init"); len(init) != 1 || init[0]["workspace"] != nil {
+		t.Fatalf("first init should follow the primary view: %v", init)
+	}
+
+	h.tap("Windows")
+	h.waitFor("grmob")
+	h.tap("grmob")
+	deadline := time.Now().Add(2 * time.Second)
+	var cmds []map[string]any
+	for time.Now().Before(deadline) {
+		if cmds = s1.sentNamed("workspace.focus"); len(cmds) > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(cmds) != 1 {
+		t.Fatalf("want one workspace.focus, got %d", len(cmds))
+	}
+	s1.deliver(map[string]any{"t": "cmd_result", "id": cmds[0]["id"], "ok": true})
+	// The pin lands on the Conn only after the ok; give the reply a moment.
+	time.Sleep(50 * time.Millisecond)
+
+	s1.drop()
+	h.waitFor("Reconnecting")
+	// While the socket is down the screen must not blame the server's
+	// version for the phone's inability to follow right now.
+	if shows(h.html(), "does not support per-window following") {
+		t.Errorf("the reconnect gap is reported as a missing capability:\n%s", h.html())
+	}
+
+	s2 := h.desk.socket(t, 1)
+	init := s2.sentNamed("init")
+	if len(init) != 1 {
+		t.Fatalf("the second socket got %d init messages", len(init))
+	}
+	if init[0]["workspace"] != "w2" {
+		t.Errorf("redial init lost the follow pin: %v", init[0])
+	}
+}

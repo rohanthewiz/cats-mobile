@@ -198,6 +198,14 @@ func (c *Connection) Retry() {
 // protocol mismatch); every other failure walks the backoff ladder.
 func (c *Connection) run(ctx context.Context, gen int, endpoint catsclient.Endpoint) {
 	backoff := catsclient.NewBackoff(nil)
+	// workspace is the follow pin carried from one socket to the next. A pin
+	// lives on the Conn that set it (FollowWorkspace updates it only after the
+	// server said ok), and that Conn dies with its socket; without this the
+	// redial would open on the primary view and a phone watching a side
+	// window would silently jump back on every network blip. Scoped to the
+	// generation on purpose: Connect starts a fresh loop, and a new pairing or
+	// endpoint has no business inheriting a workspace id from another desk.
+	workspace := ""
 	for {
 		if !c.setStatus(gen, StatusConnecting, nil) {
 			return
@@ -272,6 +280,7 @@ func (c *Connection) run(ctx context.Context, gen int, endpoint catsclient.Endpo
 		c.session.ResetForNewSocket()
 		conn := catsclient.New(socket, catsclient.Options{
 			Endpoint:  endpoint,
+			Workspace: workspace,
 			OnMessage: func(msg any) { c.onMessage(gen, msg) },
 		})
 		c.conn = conn
@@ -313,6 +322,12 @@ func (c *Connection) run(ctx context.Context, gen int, endpoint catsclient.Endpo
 		case <-conn.Done():
 		}
 		cause := conn.Err()
+		// Whatever the user last asked to follow on this socket is what the
+		// next one asks for in its Init. An id the server no longer knows is
+		// fine to send: the server falls back to the primary view, and the
+		// Windows screen marks "Showing" from the server's layout, not from
+		// this pin.
+		workspace = conn.PinnedWorkspace()
 		c.mu.Lock()
 		if gen == c.gen && c.conn == conn {
 			c.conn = nil

@@ -636,9 +636,18 @@ x/mobile so `gomobile bind` runs from here.
 - Restarting catway (or changing its state dir) invalidates the phone's
   session: the HMAC is per process. The app handles it as designed (401 →
   hard stop → "Your session has expired. Pair again from More.").
-- Windows → follow was not exercised: it needs a desktop window, which
-  means signing into the desk from a browser or catapp. Left for a manual
-  pass.
+- Windows → follow, walked later the same day against two headless desktop
+  windows (`catctl probe --workspace w1` / `w2`, which count as sizers).
+  Tap follows, "Follow the primary view" releases, the desk's windows see
+  no layout change. Two bugs found and fixed: the pin did not survive a
+  socket drop (the redial built its Conn without `Options.Workspace`, so a
+  phone on a side window jumped back to the primary on every blip; the
+  reconnect loop now carries `PinnedWorkspace()` into the next Init), and
+  the reconnect gap showed "this desk's server does not support
+  per-window following" because `Live()` was nil, not because the server
+  said so. Observed, not changed: closing the followed window leaves the
+  phone on that workspace with no "Showing" badge anywhere and no note in
+  the census line; the release button is the way back.
 - No lifecycle hook yet (grmob ROADMAP): only a dead socket triggers a
   reconnect, so a long-backgrounded phone reconnects on its first failed
   write, not on foreground.
