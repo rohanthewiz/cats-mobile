@@ -674,16 +674,15 @@ a Go job (gofmt, vet, race tests, WASM build) and an Android job that
 built into `RUNNER_TEMP`. No iOS job: needs full Xcode, and grmob's CI
 type-checks the Swift shell.
 
-**cats** (working tree only, NOT committed). `cmd/catgen-dart` and its golden
+**cats** (`5add396` on `spike/wire-leaf`). `cmd/catgen-dart` and its golden
 removed with `git rm` (the golden had uncommitted regenerations for
 `pane.keep`, which go with it), `docs/protocols/dart-client.md` deleted and
 unlinked from `mkdocs.yml`, the layout block in `docs/index.md` and the
 command-table paragraph in `docs/protocols/index.md` reworded, and three
 comment pointers (`internal/flags/flags.go`, `internal/app/command_vocab_test.go`,
-`wire/vocab_test.go`) now say the phone imports `wire`. Left uncommitted
-because another session was staging its own work in that checkout at the
-same minute (the tidy-exit-countdown session); commit the deletion as its
-own commit once that lands.
+`wire/vocab_test.go`) now say the phone imports `wire`. Committed after the other session working
+in that checkout (the tidy-exit-countdown one) landed its `be61142`, so the
+two stayed separate commits.
 
 **Still open, deliberately.** `wire` lives on `spike/wire-leaf`, not cats
 main. CI resolves the pinned commit through the proxy today because the
