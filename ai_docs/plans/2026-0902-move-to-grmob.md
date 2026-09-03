@@ -697,3 +697,75 @@ caller's value is untouched, and refuses a contradicting `T` with
 `ErrTypeMismatch`. `TestMarshalStampsEveryType` pins the table against both
 decoders. cats-mobile is pinned at `d58ce46`; `conn.go`'s handshake no longer
 sets `T` and `stampUp` became `allowUp`, the viewer allowlist alone.
+
+## 14. §12's grmob items (2026-09-02): grmob v0.2.3
+
+The five grmob-side findings from the phase-5 walk, fixed in grmob and
+pinned here as **v0.2.3** (`8a9d50c` the renderers, `fbf765c` the
+lifecycle, then a one-line `@MainActor` fix that v0.2.2 shipped without:
+grmob's verify harness type-checks `Runtime/` only, and `App/` was first
+compiled by this repo's `build-ios.sh`). Everything below is grmob-wide;
+church gets it on its next pin.
+
+**Lifecycle (the roadmap item).** A `"lifecycle"` host event with one key,
+`state` ∈ active / inactive / background (SwiftUI's ScenePhase vocabulary).
+`core/lifecycle.go` is core's second consumer on the host-event channel
+after audio status: `CurrentLifecycle`, `OnLifecycle`, a typed
+`ReceiveLifecycle` that drops repeats so subscribers hear transitions only;
+`hooks.UseLifecycle` mirrors `UseAudio`. Shells: Android observes
+`ProcessLifecycleOwner` (new `lifecycle-process` dependency) rather than the
+Activity, because an Activity is rebuilt on every rotation and a
+reconnect-on-resume app would redial each turn; iOS reads `scenePhase` at
+the `App`; the browser reports `visibilitychange` as active/background.
+`mobile/verify/lifecycle_test.go` holds the three shells' spellings to
+core's constants.
+
+cats-mobile's use of it: `Services.Bind` subscribes once and calls the new
+`Connection.Resume` on the active transition. Resume wakes a loop asleep in
+its backoff (the Retry nudge, minus restarting a hard stop) and, when
+connected, **probes** the socket — `Conn.Probe` pings through the new
+optional `catsclient.Pinger` (the native `WSSocket` implements it; the
+browser socket cannot and reports nil) with a 5 s bound and fails the Conn
+on error, so `Done` fires and the loop redials at once instead of on the
+first failed write. `TestForegroundProbesTheSocketAndRedials` runs the whole
+chain from `core.ReceiveLifecycle` to the second socket's `init`.
+
+**Column default = stretch.** A Column/List/Scroll with no `AlignItems` and
+no `Align` now stretches its children on both natives — the CSS default and
+what WASM/htmlout always drew, which is why inputs ran full width in the
+browser and hugged on a phone. A child with an explicit `Width` or an inline
+`Display` keeps its width (the themes' Button and Badge are inline; the web
+runtime already turned that into `width: fit-content`), so buttons still hug
+and `Button{FullWidth}` still asks for the stretch back. Compose reads it in
+`isColumnStretch` + `hugsContent`; SwiftUI in `columnStretches` with a
+`GrMobFlexHugs` layout value so the flex layout proposes a hugging child its
+own width. Rows keep packing (the intrinsic-height measurement a stretched
+Row needs has real costs inside a List). Documented under the AlignItems
+stretch heading in `docs/platforms/native.md`.
+
+**Status-bar strip.** `core.SafeArea` takes style props like the other
+containers (source-compatible with `SafeArea(child)`), and
+`components.Screen` forwards *only* its background to it, read off a
+scratch `Style`. The inset is padding on that node, so the colour paints
+under the bars; SwiftUI extends it with `ignoresSafeArea`. The five
+snapshot goldens here changed by exactly one line each: the SafeArea div
+gained `background:#14161c`.
+
+**iOS Fill+Scroll.** `GrMobScroll` measures its viewport off a background
+`GeometryReader` (a wrapping one would make the ScrollView greedy on both
+axes) and hands a FlexGrow child that height as `GrMobGrow.minHeight` — the
+SwiftUI spelling of v0.2.1's Compose `heightIn(min = viewport)`.
+
+**Dialog frame.** The Modal's default surface (Compose's white card, iOS's
+system sheet) steps aside when a direct child paints its own background,
+which its comment already promised: the DOM draws a Modal as the backdrop
+alone. No app change — `confirmDialog`'s column already carries
+`Colors.Surface`; on iOS that colour becomes the sheet's
+`presentationBackground`.
+
+**Not done, deliberately.** Row's cross axis still packs (see above). Box
+on the natives does not stretch either, though on the web it is a flex
+column; nothing in this app depends on it. The walk with the emulator and
+simulator that would confirm the four cosmetic fixes by eye has not been
+repeated — the shells compile against the pin and the Go/WASM/Swift-typecheck
+suites are green, but the pictures are still owed.
