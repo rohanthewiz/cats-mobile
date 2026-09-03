@@ -1,0 +1,117 @@
+# Continuous integration for cats-mobile, modelled on grmob's.
+#
+# Two runners, split by what each check needs:
+#
+#   go       ubuntu   Go toolchain            gofmt, vet, race tests, WASM build
+#   android  ubuntu   Go + JDK 17 + NDK       gomobile bind of the AAR
+#
+# The Go job is the fast one and is what a contributor watches. The Android job
+# is the only check that the app links for a device target (cgo through the
+# NDK, gobind over ./app's exported surface); it stops at the AAR because the
+# Kotlin shell that would consume it lives in grmob, not here.
+#
+# There is no iOS job: gomobile's iOS target needs full Xcode, and grmob's own
+# CI already type-checks the Swift shell. The Go side of that bind is the same
+# code the Android job links.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: nothing here writes to the repo or publishes anything.
+permissions:
+  contents: read
+
+# A second push to the same branch supersedes the first. Tags are excluded
+# from cancellation by including the ref in the group.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go and WASM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Reads the toolchain from the `go` line so a bump happens in one
+          # place. setup-go caches the module and build caches by default.
+          go-version-file: go.mod
+
+      - name: gofmt
+        # `gofmt -l` lists unformatted files and still exits 0, so the status
+        # has to come from whether it printed anything.
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+          echo "gofmt: clean"
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test -race
+        # The race build runs the same tests as a plain `go test ./...` and
+        # additionally instruments them. catsclient's reader goroutine feeds
+        # the session while the UI reads it, which is exactly what -race is
+        # for, so this is the only test pass.
+        run: go test -race ./...
+
+      - name: Build the WASM target
+        # The browser build is also the guard that internal/catsclient's js
+        # files (dial_js.go, login_js.go) keep compiling; nothing else in the
+        # matrix builds them. RUNNER_TEMP keeps the artifact out of the tree.
+        run: GOOS=js GOARCH=wasm go build -o "$RUNNER_TEMP/main.wasm" ./wasm
+
+  android:
+    name: Android AAR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-java@v4
+        with:
+          # gomobile bind for Android needs a JDK for the generated Java
+          # bindings; 17 is what grmob's shell builds with.
+          java-version: '17'
+          distribution: temurin
+
+      - name: Build the AAR with the pinned gomobile
+        # go.mod pins gomobile/gobind in a `tool` block, but `go tool gomobile`
+        # alone is not enough: gomobile execs a *gobind executable* by name and
+        # fails with "gobind was not found, please run gomobile init" when one
+        # is not on PATH. Building the pinned gobind into a temp dir and
+        # prepending it satisfies that without a `go install ...@latest`,
+        # which would ignore the pin and fetch a different version.
+        #
+        # scripts/build-android.sh is not used here: it needs a grmob checkout
+        # beside this one (for the shell the AAR lands in) and resolves
+        # gomobile from GOPATH/bin. The bind command is the same one it runs.
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/gobind" golang.org/x/mobile/cmd/gobind
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          # ANDROID_NDK_LATEST_HOME is set by the hosted image; the fallback
+          # picks the highest installed NDK the way build-android.sh does.
+          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$(ls -d "$ANDROID_HOME"/ndk/* | sort -V | tail -1)}"
+          go tool gomobile bind -target=android -androidapi 24 \
+            -o "$RUNNER_TEMP/cats.aar" \
+            github.com/rohanthewiz/grmob/mobile ./app
+          ls -l "$RUNNER_TEMP/cats.aar"

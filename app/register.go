@@ -1,9 +1,9 @@
 // Package catsapp is the cats phone client: the UI, written in Go on the
 // grmob framework, over the protocol layer in internal/catsclient.
 //
-// It is the port of the Flutter app this repository used to be. The Dart
-// package under ../packages stays as a reference until phase 6 deletes it;
-// the two consume the same wire contract from the cats repo's `wire` package.
+// It is the port of the Flutter app this repository used to be (the Dart was
+// deleted once the port proved parity against its tests). The wire contract
+// comes straight from the cats repo's `wire` package; go.mod pins the commit.
 //
 // # Integration contract
 //
