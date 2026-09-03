@@ -19,8 +19,9 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-# Where grmob lives. The go.mod replace directive points at a local checkout
-# while TextGrid is unreleased; honour the same path here, and let an
+# Where grmob lives. go.mod pins a tagged grmob for the Go side; the JS
+# runtime is copied from a checkout beside this one, and should be at the
+# same tag (scripts/lib.sh checks that for the native builds). Let an
 # explicit GRMOB win for anyone whose layout differs.
 GRMOB="${GRMOB:-../grmob}"
 if [ ! -d "$GRMOB/wasm" ]; then

@@ -17,7 +17,7 @@ require (
 
 require (
 	github.com/rohanthewiz/bytdb v0.11.0
-	github.com/rohanthewiz/grmob v0.0.0-00010101000000-000000000000
+	github.com/rohanthewiz/grmob v0.2.1
 )
 
 require (
@@ -25,12 +25,22 @@ require (
 	github.com/rohanthewiz/element v0.7.0 // indirect
 	github.com/rohanthewiz/serr v1.4.0 // indirect
 	github.com/tidwall/btype v0.3.0 // indirect
+	golang.org/x/mobile v0.0.0-20251021151156-188f512ec823 // indirect
+	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/tools v0.38.0 // indirect
 )
 
 // Development only, while the wire package lives on a cats branch rather than
 // main. Drop this and pin a real sha before the README claims gate 2 is real.
 replace github.com/rohanthewiz/cats => ../cats
 
-// grmob's core.TextGrid (the pane renderer) landed after its last release.
-// Drop this once a grmob tag carries it.
-replace github.com/rohanthewiz/grmob => ../grmob
+// gobind and gomobile are not imported by any Go file; the tool block holds
+// them so `go mod tidy` keeps x/mobile, pinned to the version grmob's own
+// tool block names. scripts/build-android.sh and build-ios.sh bind from this
+// module (gobind only sees the module it runs in), so the pin has to live
+// here, not only in grmob.
+tool (
+	golang.org/x/mobile/cmd/gobind
+	golang.org/x/mobile/cmd/gomobile
+)
