@@ -658,3 +658,35 @@ stretch); the status-bar strip stays light because Screen paints the
 background below the SafeArea inset; on iOS the Fill+Scroll column stops
 short of the bottom (the SwiftUI cousin of the Android collapse, milder);
 the confirm dialog on Android has a white frame around its dark body.
+
+## 13. Phase 6 result (2026-09-02): the Dart is gone, gate 2 exists
+
+**cats-mobile** (two commits on main). `packages/`, `pubspec.*`, `CATS_REV`
+and `tool/regen.sh` deleted, `.gitignore` stripped to the Go-era entries.
+Parity was checked first, both ways: the Dart suite green (85 tests) and
+`go test -race ./...` green *without* the `../cats` replace, against the
+pushed `c0a250f` on `spike/wire-leaf`, so the replace is dropped and go.mod
+is the whole pin. README rewritten in Go terms (layout, the four viewer-mode
+layers as `Conn`/`Send`/`FollowWorkspace`/`viewer_mode_test`, the bump
+recipe and the two tests that catch a bad one). `.github/workflows/ci.yml`:
+a Go job (gofmt, vet, race tests, WASM build) and an Android job that
+`go tool gomobile bind`s the AAR from this module with the pinned gobind
+built into `RUNNER_TEMP`. No iOS job: needs full Xcode, and grmob's CI
+type-checks the Swift shell.
+
+**cats** (working tree only, NOT committed). `cmd/catgen-dart` and its golden
+removed with `git rm` (the golden had uncommitted regenerations for
+`pane.keep`, which go with it), `docs/protocols/dart-client.md` deleted and
+unlinked from `mkdocs.yml`, the layout block in `docs/index.md` and the
+command-table paragraph in `docs/protocols/index.md` reworded, and three
+comment pointers (`internal/flags/flags.go`, `internal/app/command_vocab_test.go`,
+`wire/vocab_test.go`) now say the phone imports `wire`. Left uncommitted
+because another session was staging its own work in that checkout at the
+same minute (the tidy-exit-countdown session); commit the deletion as its
+own commit once that lands.
+
+**Still open, deliberately.** `wire` lives on `spike/wire-leaf`, not cats
+main. CI resolves the pinned commit through the proxy today because the
+branch is pushed, but a rebase or branch delete would break every build;
+merging the carve-out into main is the real close of the loop. And
+`wire.Marshal` still does not stamp `"t"` (§8, §9).
