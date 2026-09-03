@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Mirrors packages/catsproto/test/endpoint_test.dart. The sha256 vectors are
+// Ported from the Dart suite's endpoint_test.dart (deleted in phase 6). The sha256 vectors are
 // gone with the hand-rolled hash: crypto/sha256 is the standard library's.
 
 func TestFingerprintsCompareAcrossFormatting(t *testing.T) {

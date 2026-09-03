@@ -2,8 +2,8 @@ module github.com/rohanthewiz/cats-mobile
 
 go 1.26.1
 
-// cats is the wire contract, and this line IS the pin: it replaces CATS_REV and
-// tool/regen.sh from the Dart days. Bump it with
+// cats is the wire contract, and this line IS the pin (there is no CATS_REV
+// or generated mirror any more; the phone imports `wire` directly). Bump it with
 //
 //	go get github.com/rohanthewiz/cats@<sha> && go mod tidy
 //
@@ -30,10 +30,6 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
 )
-
-// Development only, while the wire package lives on a cats branch rather than
-// main. Drop this and pin a real sha before the README claims gate 2 is real.
-replace github.com/rohanthewiz/cats => ../cats
 
 // gobind and gomobile are not imported by any Go file; the tool block holds
 // them so `go mod tidy` keeps x/mobile, pinned to the version grmob's own

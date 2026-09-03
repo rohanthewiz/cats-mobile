@@ -6,7 +6,7 @@ import (
 	"github.com/rohanthewiz/cats/wire"
 )
 
-// Mirrors packages/catsproto/test/grid_test.dart.
+// Ported from the Dart suite's grid_test.dart (deleted in phase 6).
 
 func testFrame(w, h int, defFg, defBg uint32) *wire.PaneFrame {
 	cells := make([]wire.Cell, w*h)

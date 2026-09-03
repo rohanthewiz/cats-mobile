@@ -6,6 +6,8 @@ github.com/rohanthewiz/btypedb v0.7.0 h1:i8zu+Rc5YIkocbVuNk1jlnb94g9RTtJQGAGm9xo
 github.com/rohanthewiz/btypedb v0.7.0/go.mod h1:K+7M8clbmaVh33X9QYm1sA5A7DWDKOE1+O9WFQflMI0=
 github.com/rohanthewiz/bytdb v0.11.0 h1:s7SyK5clCv7DKkNOkIzmBQ0iPDXCEXnamhP1g/O+XBA=
 github.com/rohanthewiz/bytdb v0.11.0/go.mod h1:HKuQb7ptS/dPzagWWttvfy1qkQulke/p8JUHZeDOvO4=
+github.com/rohanthewiz/cats v0.0.0-20260902185955-c0a250f03f01 h1:by0ygnIlfdUE+YgZCWL3PfpgT/ibIyGT45bNZZbDtwI=
+github.com/rohanthewiz/cats v0.0.0-20260902185955-c0a250f03f01/go.mod h1:vxFqqArvWQikHn8XI90fRbWEFteMFIiym622thESgSY=
 github.com/rohanthewiz/element v0.7.0 h1:vLPrti03a7EevsBVeM8TAWsMLmg8UM8owXwe5Vf1rI0=
 github.com/rohanthewiz/element v0.7.0/go.mod h1:YZnKqWX2lSsR+zi06x3vhViYVoOSx8xHQjUMTmM/FLo=
 github.com/rohanthewiz/grmob v0.2.1 h1:pTYCHXETR8PCYmHlqVwl+JwHaoVJNzMaVxc36uKSPVE=

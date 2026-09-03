@@ -2,9 +2,9 @@
 // finds a catway, decides to trust it, holds one WebSocket session with it, and
 // folds the down-message stream into state a screen can render.
 //
-// It is the Go port of the Dart package that preceded it (packages/catsproto),
-// file for file, and every test file here mirrors its Dart counterpart so the
-// two can be read side by side until the Dart is deleted.
+// It is the Go port of the Dart package that preceded it (packages/catsproto,
+// deleted once this port proved parity against its tests), file for file; the
+// test files still name the Dart file each one was ported from.
 //
 // # Layout
 //

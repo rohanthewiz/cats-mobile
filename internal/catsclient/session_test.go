@@ -7,7 +7,7 @@ import (
 	"github.com/rohanthewiz/cats/wire"
 )
 
-// Mirrors packages/catsproto/test/session_test.dart and the fold half of
+// Ported from the Dart suite's session_test.dart (deleted in phase 6) and the fold half of
 // views_test.dart.
 
 func agent(pub, state string, opts ...func(*wire.AgentItem)) wire.AgentItem {

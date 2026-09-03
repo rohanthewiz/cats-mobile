@@ -11,7 +11,7 @@ import (
 	"github.com/rohanthewiz/cats/wire"
 )
 
-// Mirrors packages/catsproto/test/connection_test.dart, plus the "picking a
+// Ported from the Dart suite's connection_test.dart (deleted in phase 6), plus the "picking a
 // window" half of views_test.dart, which exercised the connection.
 
 func newTestConn(t *testing.T, socket *fakeSocket, opts Options) *Conn {
