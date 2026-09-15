@@ -29,6 +29,15 @@ type Services struct {
 	Conn  *Connection
 
 	bootOnce sync.Once
+	// navMu guards navCtx, the navigator's root context as the shell last
+	// rendered it. A notification tap arrives on a host-event goroutine with
+	// no context of its own, and opening the pane needs one; see
+	// openFromNotification in attention.go.
+	navMu  sync.Mutex
+	navCtx *core.Context
+	// stopTap cancels Bind's core.OnNotificationTap subscription, for the
+	// same test-binary reason as stopLifecycle.
+	stopTap func()
 	// stopLifecycle cancels Bind's core.OnLifecycle subscription. The
 	// subscription is process-wide and the app never needs it gone, but a
 	// test binary builds many Services in one process and each one's
@@ -82,6 +91,11 @@ func (s *Services) Bind(ctx interface{ RequestRender() }) {
 				s.Conn.Resume()
 			}
 		})
+		// A tapped notification names the pane that blocked. Subscribed here
+		// for the lifecycle subscription's reasons, and before the shell's
+		// first report can arrive: Android reports a cold-launch tap right
+		// after the runtime starts, which is after this first pass.
+		s.stopTap = core.OnNotificationTap(s.openFromNotification)
 		if endpoint, ok := s.Store.Active(); ok {
 			s.Conn.Connect(endpoint)
 		}

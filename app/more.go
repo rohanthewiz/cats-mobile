@@ -92,6 +92,9 @@ func moreScreen(ctx *core.Context) core.View {
 			func() { confirm.Set(confirmForget) }, nil),
 	)
 
+	// Called on every pass, in this position: notificationsRow holds a hook.
+	items = append(items, sectionHeader(ctx, "THIS PHONE"), notificationsRow(ctx))
+
 	items = append(items, sectionHeader(ctx, "ABOUT"))
 	items = append(items, contentRow(ctx, "ℹ️", "Cats "+appVersion(), buildLine(), nil, nil))
 	items = append(items, core.Spacer(24))

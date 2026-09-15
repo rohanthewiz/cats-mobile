@@ -181,7 +181,25 @@ func paneScreen(pane uint32, pub string) func(*core.Context) core.View {
 			),
 			paneChrome(ctx, pub, cwd, branch, agent, hasAgent, exit, exited, modes, dropped),
 			body,
-			composer(ctx, view, func(v string) { update(func(p *paneView) { p.Draft = v }) }, send),
+			composer(ctx, view, func(v string) { update(func(p *paneView) { p.Draft = v }) }, send,
+				// Appended rather than replacing the draft: a reply is often a
+				// sentence plus a pasted path or error. The answer arrives on
+				// the host-event goroutine, which update's copy-on-write is
+				// safe on. A refusal says so; an empty clipboard says so too,
+				// rather than a Paste that silently does nothing.
+				func() {
+					core.ReadClipboard(func(text string, ok bool) {
+						switch {
+						case !ok:
+							toast("Could not read the clipboard.")
+						case text == "":
+							toast("The clipboard has no text.")
+						default:
+							update(func(p *paneView) { p.Draft += text })
+						}
+					})
+				},
+			),
 			confirmDialog(ctx, view.ConfirmReveal,
 				"Reveal at the desk?",
 				"This moves the desktop's focus to "+pub+". Whoever is at the desk will see it switch.",
@@ -260,12 +278,17 @@ func modeText(m wire.PaneModes) string {
 	return strings.Join(parts, ", ")
 }
 
-// composer is the reply bar: a text area, "Type" (stage the text without
-// Enter, for a prompt the user wants to review at the desk or a program that
-// filters as you type) and "Send" (text followed by Enter). An empty draft
-// with Send is just an Enter, which is how you answer a "press enter to
-// continue".
-func composer(ctx *core.Context, view *paneView, onChange func(string), send func(submit bool)) core.View {
+// composer is the reply bar: a text area, "Paste" (append the clipboard's
+// text to the draft), "Type" (stage the text without Enter, for a prompt the
+// user wants to review at the desk or a program that filters as you type)
+// and "Send" (text followed by Enter). An empty draft with Send is just an
+// Enter, which is how you answer a "press enter to continue".
+//
+// Paste is a button rather than relying on the text area's own paste because
+// the phone's long-press paste menu is fiddly over a two-line field, and the
+// commonest reply to a blocked agent is a path or an error copied from
+// somewhere else.
+func composer(ctx *core.Context, view *paneView, onChange func(string), send func(submit bool), paste func()) core.View {
 	theme := ctx.Theme()
 	return core.Column(
 		core.Gap(6),
@@ -280,6 +303,14 @@ func composer(ctx *core.Context, view *paneView, onChange func(string), send fun
 			core.Gap(8),
 			core.PaddingHorizontal(0),
 			core.PaddingVertical(0),
+			comps.Button{
+				Label:              "Paste",
+				Emphasis:           comps.EmphasisGhost,
+				Disabled:           view.Busy,
+				OnTap:              paste,
+				AccessibilityHint:  "Adds the clipboard's text to the end of the reply",
+				AccessibilityLabel: "Paste from the clipboard",
+			},
 			comps.Button{
 				Label:              "Type",
 				Emphasis:           comps.EmphasisOutlined,

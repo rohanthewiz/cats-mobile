@@ -227,6 +227,9 @@ func resetServicesForTest(t *testing.T) (*fakeDesk, *store.Store) {
 		if services.stopLifecycle != nil {
 			services.stopLifecycle()
 		}
+		if services.stopTap != nil {
+			services.stopTap()
+		}
 		servicesOnce = sync.Once{}
 		services = nil
 		store.Close()

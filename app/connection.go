@@ -50,8 +50,12 @@ type Connection struct {
 	// of the rollup, and the rollup only goes out on a change, so the label
 	// has to tick from here (see AgentAge).
 	agentsAt time.Time
-	gen      int
-	cancel   context.CancelFunc
+	// watch remembers which agents were blocked in the last rollup, so the
+	// next one can be read as a change (attention.go). Reset by Connect, kept
+	// across a socket drop.
+	watch  blockedWatch
+	gen    int
+	cancel context.CancelFunc
 	// wake is signalled by Retry so a loop sitting in its backoff wait tries
 	// again now. Buffer of one: a second Retry during the same wait is the
 	// same request.
@@ -148,6 +152,9 @@ func (c *Connection) Connect(endpoint catsclient.Endpoint) {
 	c.certSeen = ""
 	c.conn = nil
 	c.session = catsclient.NewSession()
+	// A new pairing or endpoint is a different desk: its first rollup seeds
+	// the watch again rather than announcing every agent already blocked.
+	c.watch.reset()
 	c.mu.Unlock()
 	c.notify()
 
@@ -434,10 +441,18 @@ func (c *Connection) onMessage(gen int, msg any) {
 		return
 	}
 	c.session.Apply(msg)
+	var became []wire.AgentItem
+	var cleared []string
 	if _, ok := msg.(*wire.Agents); ok {
 		c.agentsAt = time.Now()
+		// Read off the folded session rather than the message, so the watch
+		// sees exactly the roster the screens will draw.
+		became, cleared = c.watch.observe(c.session.Agents)
 	}
 	c.mu.Unlock()
+	// Outside the lock: announce sends system events, which a native shell
+	// handles synchronously, and a render pass may be waiting on mu.
+	announce(became, cleared)
 	c.notify()
 }
 

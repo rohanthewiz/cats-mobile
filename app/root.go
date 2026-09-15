@@ -65,6 +65,10 @@ func shell(ctx *core.Context) core.View {
 	// Hooks first, unconditionally, before the branch below.
 	selected := core.NewState(ctx, 0)
 	services := Get()
+	// The root route's context is the one a notification tap pushes the pane
+	// screen onto (Services.openFromNotification). Recorded before the
+	// branch so it is there from the very first pass.
+	services.SetNavigator(ctx)
 
 	if !services.Paired() {
 		return pairScreen(ctx.Scope("pair"))
