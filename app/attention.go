@@ -29,7 +29,7 @@ import (
 //	notification tap ──▶ core.OnNotificationTap ──▶ Services.openFromNotification
 //	                                                   └──▶ core.Push(paneScreen)
 //
-// # Why the buzz always and the banner only in the background
+// # Why the buzz in the foreground and the banner only in the background
 //
 // A phone in the hand is looking at the app: the roster has already moved the
 // agent to "Needs you", and a banner over it — which iOS draws for a
@@ -38,6 +38,22 @@ import (
 // pocket or on another app gets the banner, and the banner is taken down
 // again when the agent unblocks, so the notification list never holds a
 // request nobody can answer any more.
+//
+// announce calls core.Haptic on every block, but it only lands in the
+// foreground: Android 12+ drops a background app's vibration
+// (ignored_background), and a suspended iOS app runs nothing.
+//
+// # What the background actually gets
+//
+// Less than the paragraph above implies, and the device walk measured it. The
+// banner needs a rollup to arrive, and both platforms stop that within seconds
+// of the app leaving the screen: iOS suspends the process, and Android's
+// background firewall cuts the socket after about 5 s (API 36 emulator). So
+// the first block in that window posts; a later block, or the agent
+// unblocking, reaches the app only once it is back in front, when the
+// reconnect rollup is compared with the watch as usual. An agent that blocks
+// minutes after the phone went into a pocket raises nothing — that needs
+// server push from catway, which this app does not have.
 //
 // # Why the first rollup after a pairing is silent
 //
