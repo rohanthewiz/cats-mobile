@@ -1,7 +1,7 @@
 package catsapp
 
 import (
-	"github.com/rohanthewiz/grmob/components"
+	"github.com/rohanthewiz/grmob/comps"
 	"github.com/rohanthewiz/grmob/core"
 )
 
@@ -24,9 +24,9 @@ func screenHeader(ctx *core.Context, title string, actions ...core.View) core.Vi
 		core.PaddingVertical(10),
 	}
 	if core.CanPop(ctx) {
-		items = append(items, components.Button{
+		items = append(items, comps.Button{
 			Label:              "‹",
-			Emphasis:           components.EmphasisGhost,
+			Emphasis:           comps.EmphasisGhost,
 			OnTap:              func() { core.Pop(ctx) },
 			AccessibilityLabel: "Back",
 			Style: []core.StyleProp{
@@ -56,7 +56,7 @@ func screenHeader(ctx *core.Context, title string, actions ...core.View) core.Vi
 		core.PaddingHorizontal(0),
 		core.PaddingVertical(0),
 		core.Row(items...),
-		components.Separator{},
+		comps.Separator{},
 	)
 }
 
@@ -64,9 +64,9 @@ func screenHeader(ctx *core.Context, title string, actions ...core.View) core.Vi
 // one carries an AccessibilityLabel, because a screen reader announcing "↻"
 // is announcing nothing.
 func headerAction(glyph, label string, onTap func()) core.View {
-	return components.Button{
+	return comps.Button{
 		Label:              glyph,
-		Emphasis:           components.EmphasisGhost,
+		Emphasis:           comps.EmphasisGhost,
 		OnTap:              onTap,
 		AccessibilityLabel: label,
 		Style: []core.StyleProp{
@@ -106,7 +106,7 @@ func contentRow(ctx *core.Context, glyph, title, subtitle string, onTap func(), 
 			core.TextColor(theme.Colors.Primary),
 		)
 	}
-	return components.ListRow{
+	return comps.ListRow{
 		Leading:  leading,
 		Title:    title,
 		Subtitle: subtitle,
@@ -161,9 +161,9 @@ func noticeStrip(ctx *core.Context, text string, actionLabel string, action func
 		core.Box(core.FlexGrow(1), mutedText(ctx, text)),
 	}
 	if action != nil {
-		items = append(items, components.Button{
+		items = append(items, comps.Button{
 			Label:    actionLabel,
-			Emphasis: components.EmphasisGhost,
+			Emphasis: comps.EmphasisGhost,
 			OnTap:    action,
 			Style:    []core.StyleProp{core.FontSize(13)},
 		})
@@ -195,8 +195,8 @@ func confirmDialog(ctx *core.Context, visible bool, title, body, confirmLabel st
 				core.Justify(core.JustifyEnd),
 				core.Gap(8),
 				core.PaddingHorizontal(0),
-				components.Button{Label: "Cancel", Emphasis: components.EmphasisGhost, OnTap: onCancel},
-				components.Button{Label: confirmLabel, OnTap: onConfirm},
+				comps.Button{Label: "Cancel", Emphasis: comps.EmphasisGhost, OnTap: onCancel},
+				comps.Button{Label: confirmLabel, OnTap: onConfirm},
 			),
 		)),
 	)
@@ -212,7 +212,7 @@ func toast(message string) { core.ShowToast(message) }
 // app says it.
 func stateBadge(ctx *core.Context, state string, seen bool) core.View {
 	label, variant := stateLabel(state, seen)
-	return components.Badge{Text: label, Variant: variant}
+	return comps.Badge{Text: label, Variant: variant}
 }
 
 // scrollColumn is a screen body: a header, then everything else in one

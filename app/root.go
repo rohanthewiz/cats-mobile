@@ -3,7 +3,7 @@ package catsapp
 import (
 	"github.com/rohanthewiz/cats-mobile/internal/catsclient"
 	"github.com/rohanthewiz/cats/wire"
-	"github.com/rohanthewiz/grmob/components"
+	"github.com/rohanthewiz/grmob/comps"
 	"github.com/rohanthewiz/grmob/core"
 )
 
@@ -76,7 +76,7 @@ func shell(ctx *core.Context) core.View {
 	}
 	active := tabs[index]
 
-	return components.Screen{
+	return comps.Screen{
 		Fill: true,
 		Children: []core.View{
 			connectionBanner(ctx, services.Conn),
@@ -168,7 +168,7 @@ func navBar(ctx *core.Context, selected int, onSelect func(int)) core.View {
 		core.Gap(0),
 		core.PaddingHorizontal(0),
 		core.PaddingVertical(0),
-		components.Separator{},
+		comps.Separator{},
 		core.Row(items...),
 	)
 }

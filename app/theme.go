@@ -77,7 +77,6 @@ func themeFor(server *wire.Theme) *core.Theme {
 	theme.Typography.Subtitle.TextColor = theme.Colors.TextPrimary
 	theme.Typography.Body.TextColor = theme.Colors.TextPrimary
 	theme.Typography.Caption.TextColor = theme.Colors.TextSecondary
-	theme.Components.Text.TextColor = theme.Colors.TextPrimary
 	theme.Components.Input.TextColor = theme.Colors.TextPrimary
 	theme.Components.Input.Background = theme.Colors.Surface
 	theme.Components.TextArea.TextColor = theme.Colors.TextPrimary

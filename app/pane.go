@@ -7,7 +7,7 @@ import (
 
 	"github.com/rohanthewiz/cats-mobile/internal/catsclient"
 	"github.com/rohanthewiz/cats/wire"
-	"github.com/rohanthewiz/grmob/components"
+	"github.com/rohanthewiz/grmob/comps"
 	"github.com/rohanthewiz/grmob/core"
 )
 
@@ -217,7 +217,7 @@ func paneChrome(ctx *core.Context, pub, cwd, branch string, agent wire.PaneAgent
 			mutedText(ctx, joinNonEmpty(bullet, agent.Agent, agent.Model)))
 	}
 	if exited {
-		line1 = append(line1, components.Badge{
+		line1 = append(line1, comps.Badge{
 			Text:    fmt.Sprintf("exited %d", exit),
 			Variant: exitVariant(exit),
 		})
@@ -235,11 +235,11 @@ func paneChrome(ctx *core.Context, pub, cwd, branch string, agent wire.PaneAgent
 	return core.Column(items...)
 }
 
-func exitVariant(code int) components.Variant {
+func exitVariant(code int) comps.Variant {
 	if code == 0 {
-		return components.VariantSuccess
+		return comps.VariantSuccess
 	}
-	return components.VariantError
+	return comps.VariantError
 }
 
 func branchText(branch string) string {
@@ -280,15 +280,15 @@ func composer(ctx *core.Context, view *paneView, onChange func(string), send fun
 			core.Gap(8),
 			core.PaddingHorizontal(0),
 			core.PaddingVertical(0),
-			components.Button{
+			comps.Button{
 				Label:              "Type",
-				Emphasis:           components.EmphasisOutlined,
+				Emphasis:           comps.EmphasisOutlined,
 				Disabled:           view.Busy || view.Draft == "",
 				OnTap:              func() { send(false) },
 				AccessibilityHint:  "Types the text into the pane without pressing Enter",
 				AccessibilityLabel: "Type without Enter",
 			},
-			components.Button{
+			comps.Button{
 				Label:             sendLabel(view),
 				Disabled:          view.Busy,
 				OnTap:             func() { send(true) },

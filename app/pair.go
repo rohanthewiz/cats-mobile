@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/rohanthewiz/cats-mobile/internal/catsclient"
-	"github.com/rohanthewiz/grmob/components"
+	"github.com/rohanthewiz/grmob/comps"
 	"github.com/rohanthewiz/grmob/core"
 )
 
@@ -128,7 +128,7 @@ func pairScreen(ctx *core.Context) core.View {
 		}()
 	}
 
-	return components.Screen{
+	return comps.Screen{
 		Fill:          true,
 		Scroll:        true,
 		KeyboardAware: true,
@@ -144,7 +144,7 @@ func pairScreen(ctx *core.Context) core.View {
 
 				core.Text("Run `catctl pair` at the desk and paste the link it shows.",
 					core.TextColor(theme.Colors.TextPrimary)),
-				components.FormField{
+				comps.FormField{
 					Label: "Pairing link",
 					Input: core.Input(form.URI, "cats://pair?u=…", func(v string) {
 						update(func(f *pairForm) { f.URI = v; f.Err = "" })
@@ -154,19 +154,19 @@ func pairScreen(ctx *core.Context) core.View {
 				mutedText(ctx, "Or enter the address and shared password by hand. "+
 					"The first connection will trust whatever certificate it sees; "+
 					"check the fingerprint against the desk afterwards."),
-				components.FormField{
+				comps.FormField{
 					Label: "Host",
 					Input: core.Input(form.Host, "192.168.1.20 or desk.tailnet.ts.net", func(v string) {
 						update(func(f *pairForm) { f.Host = v; f.Err = "" })
 					}),
 				},
-				components.FormField{
+				comps.FormField{
 					Label: "Port",
 					Input: core.Input(form.Port, "8443", func(v string) {
 						update(func(f *pairForm) { f.Port = v; f.Err = "" })
 					}),
 				},
-				components.FormField{
+				comps.FormField{
 					Label: "Password",
 					Input: core.InputPassword(form.Password, "shared password", func(v string) {
 						update(func(f *pairForm) { f.Password = v; f.Err = "" })
@@ -178,7 +178,7 @@ func pairScreen(ctx *core.Context) core.View {
 				core.If(form.Pinned != "",
 					mutedText(ctx, "Pinned certificate "+shortFingerprint(form.Pinned))),
 
-				components.Button{
+				comps.Button{
 					Label:     pairLabel(form),
 					FullWidth: true,
 					Disabled:  form.Busy,

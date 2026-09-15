@@ -6,7 +6,7 @@ import (
 
 	"github.com/rohanthewiz/cats-mobile/internal/catsclient"
 	"github.com/rohanthewiz/cats/wire"
-	"github.com/rohanthewiz/grmob/components"
+	"github.com/rohanthewiz/grmob/comps"
 	"github.com/rohanthewiz/grmob/core"
 )
 
@@ -128,9 +128,9 @@ func notifyRow(ctx *core.Context, index int, n wire.Notify) core.View {
 	}
 	for _, a := range n.Actions {
 		id, action, label := n.ID, a.ID, a.Label
-		buttons = append(buttons, components.Button{
+		buttons = append(buttons, comps.Button{
 			Label:    label,
-			Emphasis: components.EmphasisOutlined,
+			Emphasis: comps.EmphasisOutlined,
 			Style:    []core.StyleProp{core.FontSize(13)},
 			OnTap: func() {
 				go runCommand("answer "+label, func(c *catsclient.Conn) error {

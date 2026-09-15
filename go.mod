@@ -17,7 +17,7 @@ require (
 
 require (
 	github.com/rohanthewiz/bytdb v0.11.0
-	github.com/rohanthewiz/grmob v0.2.4
+	github.com/rohanthewiz/grmob v0.5.0
 )
 
 require (

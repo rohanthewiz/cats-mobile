@@ -7,7 +7,7 @@ import (
 
 	"github.com/rohanthewiz/cats-mobile/internal/catsclient"
 	"github.com/rohanthewiz/cats/wire"
-	"github.com/rohanthewiz/grmob/components"
+	"github.com/rohanthewiz/grmob/comps"
 	"github.com/rohanthewiz/grmob/core"
 )
 
@@ -48,7 +48,7 @@ func moreScreen(ctx *core.Context) core.View {
 	items = append(items, sectionHeader(ctx, "CONNECTION"))
 	items = append(items, contentRow(ctx, statusGlyph(info.Status), info.Status.String(),
 		joinNonEmpty(bullet, info.Endpoint.Label(), errText(info.Err)), nil,
-		components.Button{Label: "Retry", Emphasis: components.EmphasisGhost, OnTap: conn.Retry,
+		comps.Button{Label: "Retry", Emphasis: comps.EmphasisGhost, OnTap: conn.Retry,
 			Style: []core.StyleProp{core.FontSize(13)}}))
 	if info.Status == StatusConnected {
 		items = append(items, contentRow(ctx, "", "Server capabilities",
@@ -71,7 +71,7 @@ func moreScreen(ctx *core.Context) core.View {
 		isActive := e.ID == active.ID
 		var trailing core.View
 		if isActive {
-			trailing = components.Badge{Text: "Active", Variant: components.VariantSuccess}
+			trailing = comps.Badge{Text: "Active", Variant: comps.VariantSuccess}
 		}
 		var onTap func()
 		if !isActive {

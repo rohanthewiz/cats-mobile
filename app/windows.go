@@ -6,7 +6,7 @@ import (
 
 	"github.com/rohanthewiz/cats-mobile/internal/catsclient"
 	"github.com/rohanthewiz/cats/wire"
-	"github.com/rohanthewiz/grmob/components"
+	"github.com/rohanthewiz/grmob/comps"
 	"github.com/rohanthewiz/grmob/core"
 )
 
@@ -80,9 +80,9 @@ func windowsScreen(ctx *core.Context) core.View {
 	if following && canFollow {
 		items = append(items, core.Row(
 			core.Padding(16),
-			components.Button{
+			comps.Button{
 				Label:     "Follow the primary view",
-				Emphasis:  components.EmphasisOutlined,
+				Emphasis:  comps.EmphasisOutlined,
 				FullWidth: true,
 				OnTap: func() {
 					go runCommand("follow the primary view", func(c *catsclient.Conn) error {
@@ -118,13 +118,13 @@ func windowRow(ctx *core.Context, conn *Connection, w catsclient.DesktopWindow, 
 	var badges []core.PropsAndChildren
 	badges = append(badges, core.Gap(4), core.PaddingHorizontal(0), core.PaddingVertical(0))
 	if w.Followed {
-		badges = append(badges, components.Badge{Text: "Showing", Variant: components.VariantSuccess})
+		badges = append(badges, comps.Badge{Text: "Showing", Variant: comps.VariantSuccess})
 	}
 	if w.Primary {
-		badges = append(badges, components.Badge{Text: "Primary"})
+		badges = append(badges, comps.Badge{Text: "Primary"})
 	}
 	if w.Focused {
-		badges = append(badges, components.Badge{Text: "Focused", Variant: components.VariantWarning})
+		badges = append(badges, comps.Badge{Text: "Focused", Variant: comps.VariantWarning})
 	}
 	subtitle := joinNonEmpty(bullet, w.WorkspaceID, fmt.Sprintf("%d×%d", w.Cols, w.Rows))
 

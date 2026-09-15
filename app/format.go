@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/rohanthewiz/cats/wire"
-	"github.com/rohanthewiz/grmob/components"
+	"github.com/rohanthewiz/grmob/comps"
 )
 
 // Formatting helpers: the wording every screen shares.
@@ -15,15 +15,15 @@ import (
 // rollup's "has the user looked since it changed" bit; an unseen finished
 // agent reads "Done" (its output is waiting), which matters more on a phone
 // than "idle" does.
-func stateLabel(state string, seen bool) (string, components.Variant) {
+func stateLabel(state string, seen bool) (string, comps.Variant) {
 	switch state {
 	case wire.AgentBlocked:
-		return "Needs you", components.VariantError
+		return "Needs you", comps.VariantError
 	case wire.AgentWorking:
-		return "Working", components.VariantWarning
+		return "Working", comps.VariantWarning
 	case wire.AgentIdle:
 		if !seen {
-			return "Done", components.VariantSuccess
+			return "Done", comps.VariantSuccess
 		}
 		return "Idle", ""
 	default:
