@@ -76,12 +76,36 @@ xcodegen generate --quiet
 
 # -only-testing, not the whole target: it also holds grmob's own demo tests,
 # which are written against the tutorial app and fail against this one.
+#
+# The status is captured rather than piped. `xcodebuild ... | tail` reports
+# tail's exit, not xcodebuild's, so a failing test run reads as a successful
+# walk -- which is exactly the way this script lied about its first run, and the
+# same mistake the Next list once (wrongly) attributed to build-android.sh.
+# set -e does not help: a pipeline's status is its last command's.
+log="build/$TEST.log"
+bundle="build/$TEST.xcresult"
+
+# xcodebuild refuses to write over an existing result bundle ("Existing file at
+# -resultBundlePath", exit 64), so without this the second run of any walk fails
+# before it starts -- which is most of them, since a walk is something you run
+# again after changing what it walks. Safe to delete: this lives under .shell/,
+# which is gitignored and rebuilt from a tag, and the previous run's bundle has
+# already served its purpose by the time another one starts.
+rm -rf "$bundle"
+
+status=0
 xcodebuild test \
   -project GrMobApp.xcodeproj \
   -scheme GrMobApp \
   -destination "platform=iOS Simulator,name=$SIM" \
   -only-testing:"GrMobUITests/$TEST" \
   -derivedDataPath build \
-  -resultBundlePath "build/$TEST.xcresult" 2>&1 | tail -40
+  -resultBundlePath "$bundle" > "$log" 2>&1 || status=$?
 
-echo "==> screenshots and failures: build/$TEST.xcresult"
+tail -40 "$log"
+echo "==> full log: $GRMOB/ios/$log"
+echo "==> screenshots and failures: $GRMOB/ios/build/$TEST.xcresult"
+if [ "$status" -ne 0 ]; then
+  echo "==> $TEST FAILED (xcodebuild exit $status)" >&2
+  exit "$status"
+fi

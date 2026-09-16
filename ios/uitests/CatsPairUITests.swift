@@ -30,16 +30,23 @@ final class CatsPairUITests: XCTestCase {
     func testPasteTheLinkAndPair() throws {
         let app = XCUIApplication()
 
-        // iOS 16+ can put an "Allow Paste" confirmation over a programmatic
-        // pasteboard read. It is the system's, not the app's, so it has to be
-        // handled as an interruption rather than found in the app's tree.
-        addUIInterruptionMonitor(withDescription: "paste consent") { alert in
-            for label in ["Allow Paste", "Paste", "Allow"] {
-                let button = alert.buttons[label]
-                if button.exists { button.tap(); return true }
-            }
-            return false
-        }
+        // # Never wait on this app to go idle
+        //
+        // XCUITest quiesces the app before each interaction, and a grmob app
+        // never reports its run loop idle -- every step here logs "App event
+        // loop idle notification not received". For an ordinary element tap
+        // that is a warning and the tap proceeds. For `app.tap()`, which has to
+        // resolve the Target Application element first, it is fatal: it retried
+        // three times and failed the run after 8m44s with "process main thread
+        // busy for 30.0s".
+        //
+        // So nothing here taps the application itself, and system alerts are
+        // found by querying SpringBoard directly rather than through
+        // addUIInterruptionMonitor -- a monitor only fires on the next
+        // interaction with the app, and app.tap() was the nudge that used to
+        // provide. The SpringBoard queries below are the proven path: the stale
+        // alert dismissal is what cleared one that had survived a SpringBoard
+        // terminate and an app relaunch.
 
         // A leftover system alert sits above every app and swallows the taps
         // below -- an "Open in …?" prompt from a deep link opened earlier is the
@@ -60,18 +67,40 @@ final class CatsPairUITests: XCTestCase {
         XCTAssertTrue(paste.waitForExistence(timeout: 20),
                       "no Paste button on the pair screen -- is the app already paired?")
         paste.tap()
-        // An interruption monitor only fires on the next interaction with the
-        // app, so this tap is what gives the consent alert a chance to be seen.
-        app.tap()
+
+        // iOS can put an "Allow Paste" confirmation over a programmatic
+        // pasteboard read. It belongs to SpringBoard, not the app, so it is
+        // found there. waitForExistence rather than exists: the alert arrives a
+        // moment after the tap, and a bare existence check races it. A short
+        // timeout because the common case is no alert at all.
+        for label in ["Allow Paste", "Paste", "Allow"] {
+            let consent = springboard.buttons[label]
+            if consent.waitForExistence(timeout: 3) { consent.tap(); break }
+        }
 
         // Positional: comps.FormField renders its Label as a sibling Text node
         // rather than the input's accessibility label, so the pairing link
         // field is simply the first text field on the screen.
         let link = app.textFields.element(boundBy: 0)
         XCTAssertTrue(link.waitForExistence(timeout: 5), "no pairing-link field")
-        let filled = (link.value as? String) ?? ""
+
+        // Polled, not read once. core.ReadClipboard takes a callback, so the
+        // button's tap returns before the text arrives and the field fills a
+        // render later -- reading `value` straight after the tap caught it
+        // empty and failed a run in which the paste had in fact worked (the
+        // same run went on to pair successfully). There is no "idle" to wait on
+        // here either, for the reason in the comment at the top.
+        var filled = ""
+        // Named for its own wait: the pairing loop further down has a deadline
+        // of its own, and this function is one scope.
+        let pasteDeadline = Date().addingTimeInterval(10)
+        while Date() < pasteDeadline {
+            filled = (link.value as? String) ?? ""
+            if filled.hasPrefix("cats://pair") { break }
+            usleep(250_000)
+        }
         XCTAssertTrue(filled.hasPrefix("cats://pair"),
-                      "Paste did not fill the field; it holds: \(filled)")
+                      "Paste did not fill the field within 10s; it holds: \(filled)")
 
         let pair = app.buttons["Pair"]
         XCTAssertTrue(pair.waitForExistence(timeout: 5), "no Pair button")

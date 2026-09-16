@@ -27,7 +27,16 @@ final class CatsConfirmDialogUITests: XCTestCase {
         // Matched on the model line the roster renders rather than a fixed
         // index, so an empty or disconnected desk fails with a message that
         // says so instead of tapping whatever happens to be first.
-        let row = app.staticTexts.matching(
+        //
+        // buttons, NOT staticTexts. The roster row's text sits inside a Box
+        // carrying core.OnClick, and UIKit surfaces that whole subtree as a
+        // Button, so the model line arrives as `Button, label:
+        // 'claude-opus-5 · high'`. Querying staticTexts for it finds nothing and
+        // the failure reads "no agent row" -- which is how this test spent a run
+        // blaming the desk for a roster that was on screen the whole time. Plain
+        // Text still is a StaticText ('cats-mobile', 'IDLE'); only the tappable
+        // ones change type.
+        let row = app.buttons.matching(
             NSPredicate(format: "label CONTAINS[c] %@", "claude")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 20),
                       "no agent row -- is the app paired and connected to a desk with agents?")

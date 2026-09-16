@@ -14,13 +14,33 @@ import XCTest
 // sever the socket by different mechanisms — a suspended process here, a
 // background firewall there — and only the second half, the redial, is shared.
 //
+// # What counts as proof, and what does not
+//
+// An earlier version asked "is the connection banner absent?" and called that
+// connected. It is not: absence of a banner is also what a backgrounded app,
+// a transition, or a query against the wrong element type looks like. That
+// version reported a clean redial while its own screenshot showed the home
+// screen.
+//
+// So the signal here is positive and specific — the roster's agent row, which
+// only exists once the app is connected AND has folded a rollup. The banner is
+// read too, but only to make a failure legible.
+//
 // Needs an app that is already paired and connected; run CatsPairUITests first.
 //
 //   scripts/ios-walk.sh CatsResumeUITests
 final class CatsResumeUITests: XCTestCase {
 
-    // Anything the connection banner (root.go) can say. Its absence is the
-    // signal for "connected": connectionBanner renders no node at all then.
+    // buttons, not staticTexts: the roster row's text lives inside a Box with
+    // core.OnClick, so UIKit surfaces it as a Button. Plain Text nodes stay
+    // StaticText, which is why the banner below is queried the other way.
+    private func rosterRow(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "claude")).firstMatch
+    }
+
+    // Anything the connection banner (root.go) can say. Diagnostic only — never
+    // a pass condition, for the reason in the file comment.
     private let bannerPhrases = ["Connecting to", "Reconnecting", "Not connected",
                                  "session has expired", "certificate changed"]
 
@@ -33,29 +53,14 @@ final class CatsResumeUITests: XCTestCase {
         return nil
     }
 
-    /// Waits for the banner to clear, which is this app's way of saying the
-    /// socket is up. Returns whether it cleared inside the deadline.
-    private func waitForConnected(_ app: XCUIApplication, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if bannerText(app) == nil { return true }
-            usleep(500_000)
-        }
-        return false
-    }
-
     func testForegroundingRedialsTheDesk() throws {
         let app = XCUIApplication()
         app.launch()
 
-        // The roster is the proof the app is paired and folded a rollup; a run
-        // against an unpaired app should say that rather than time out later.
-        let row = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", "claude")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 20),
-                      "no agent row -- is the app paired and connected? Run CatsPairUITests first.")
-        XCTAssertTrue(waitForConnected(app, timeout: 30),
-                      "the app never reached a connected state to begin with: \(bannerText(app) ?? "")")
+        let row = rosterRow(app)
+        XCTAssertTrue(row.waitForExistence(timeout: 30),
+                      "no agent row to begin with -- is the app paired and connected? "
+                      + "Run CatsPairUITests first. Banner says: \(bannerText(app) ?? "(none)")")
 
         // Out of the foreground. iOS suspends shortly after, and the socket goes
         // with it; 20s is comfortably past that without being a long test.
@@ -64,19 +69,27 @@ final class CatsResumeUITests: XCTestCase {
 
         app.activate()
 
+        // The app has to be genuinely back in front before anything on screen
+        // means anything -- this is what the previous version skipped, and why
+        // it screenshotted the home screen and called it a success.
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30),
+                      "the app never came back to the foreground after activate()")
+
         // The redial is a backoff ladder, not an instant reconnect -- the
         // Android walk measured about a minute -- so this waits generously. What
-        // is being asserted is that it comes back on its own, with no tap.
-        let reconnected = waitForConnected(app, timeout: 120)
+        // is asserted is that the roster returns on its own, with no tap.
+        let start = Date()
+        let back = row.waitForExistence(timeout: 150)
+        let elapsed = Date().timeIntervalSince(start)
 
         let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.lifetime = .keepAlways
-        shot.name = reconnected ? "resumed" : "still-disconnected"
+        shot.name = back ? "resumed" : "still-disconnected"
         add(shot)
 
-        XCTAssertTrue(reconnected,
-                      "the app did not redial after foregrounding; the banner still says: \(bannerText(app) ?? "(none)")")
-        XCTAssertTrue(row.waitForExistence(timeout: 20),
-                      "reconnected, but the roster never came back")
+        XCTAssertTrue(back,
+                      "the app did not redial after foregrounding; "
+                      + "the banner says: \(bannerText(app) ?? "(none)")")
+        print("==> roster returned \(String(format: "%.1f", elapsed))s after foregrounding")
     }
 }
