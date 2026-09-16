@@ -642,6 +642,54 @@ func TestWindowsTabFollowsAWindowThroughTheCapability(t *testing.T) {
 	}
 }
 
+// The git rollup reaches the window rows, and a workspace the sweep said
+// nothing about stays silent rather than borrowing its neighbour's answer.
+// That is the whole risk in drawing this: the rollup is keyed by workspace and
+// the rows are drawn from the census, so a join that slipped would colour the
+// wrong tree with real-looking data.
+func TestWindowRowsCarryTheGitSyncRollup(t *testing.T) {
+	h := newHarness(t, true)
+	s := h.connect()
+	s.deliver(map[string]any{"t": "clients", "total": 3, "sizers": 2, "cols": 200, "rows": 60, "views": []any{
+		map[string]any{"workspace": "w1", "cols": 200, "rows": 60, "focused": true, "primary": true},
+		map[string]any{"workspace": "w2", "cols": 120, "rows": 40},
+		map[string]any{"workspace": "w1", "viewer": true},
+	}})
+	s.deliver(map[string]any{"t": "layout", "workspaces": []any{
+		map[string]any{"id": "w1", "name": "cats", "active": true},
+		map[string]any{"id": "w2", "name": "grmob"},
+	}, "tabs": []any{}, "panes": []any{}, "borders": []any{}})
+	// Only w1 is in the sweep. w2 is a workspace the server has nothing to say
+	// about, which is the ordinary case, not a failure.
+	s.deliver(map[string]any{"t": "ws_git", "workspaces": []any{
+		map[string]any{"ws": "w1", "sync": "ahead", "branch": "main", "remote": "origin", "ahead": 2},
+	}})
+	h.waitFor("claude-opus-5")
+
+	h.tap("Windows")
+	h.waitFor("grmob")
+	out := gohtml.UnescapeString(h.html())
+
+	// The branch and the remote are named, because neither is safe to assume.
+	if !strings.Contains(out, "main 2 ahead of origin") {
+		t.Errorf("w1's git state is not on its row:\n%s", out)
+	}
+	// Said once: the phrase belongs to the workspace it was reported for.
+	if n := strings.Count(out, "ahead"); n != 1 {
+		t.Errorf("the git phrase appears %d times; only w1 was in the rollup:\n%s", n, out)
+	}
+	// Both rows carry a dot. The one with no answer draws the plain one rather
+	// than nothing, so the column does not jump as sweeps come and go.
+	if n := strings.Count(out, "●"); n != 2 {
+		t.Errorf("want a dot on each of the 2 window rows, got %d:\n%s", n, out)
+	}
+	// Colour is reinforcement, so the dot is out of the accessibility tree and
+	// the words in the subtitle are what a screen reader hears.
+	if !strings.Contains(h.html(), `aria-hidden="true"`) {
+		t.Errorf("the git dot is announced to screen readers as well as drawn:\n%s", h.html())
+	}
+}
+
 func TestAlertsShowNotificationsNewestFirstAndNoRecordUntilTold(t *testing.T) {
 	h := newHarness(t, true)
 	s := h.connect()

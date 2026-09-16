@@ -47,6 +47,9 @@ func snapshot(t *testing.T, name string, reach func(h *harness)) {
 	s.deliver(map[string]any{"t": "layout", "workspaces": []any{
 		map[string]any{"id": "w1", "name": "cats", "active": true},
 	}, "tabs": []any{}, "panes": []any{}, "borders": []any{}})
+	s.deliver(map[string]any{"t": "ws_git", "workspaces": []any{
+		map[string]any{"ws": "w1", "sync": "ahead", "branch": "main", "remote": "origin", "ahead": 2},
+	}})
 	s.deliver(map[string]any{"t": "notify", "kind": "attention", "message": "Claude needs input",
 		"pane": 3, "pub": "w1:p3", "id": "n1", "actions": []any{
 			map[string]any{"id": "yes", "label": "Yes", "send": "y", "submit": true},
