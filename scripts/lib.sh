@@ -233,5 +233,21 @@ else
 
     echo "$stamp_want" > "$stamp_file"
   fi
+
+  # This repo's XCUITests, dropped into the shell's UI-test target.
+  #
+  # The simulator has no tap or text-entry CLI, so a UI test is the only way a
+  # script can touch an iOS screen — and previous walks wrote those tests into a
+  # scratchpad, which meant every walk rewrote them and no finding could be
+  # re-checked later. Tracking them here and copying them in is what makes them
+  # ordinary tests.
+  #
+  # Outside the stamp guard on purpose: the copy is two small files, and an
+  # edited test has to reach a shell that is already extracted. The target also
+  # holds grmob's own demo tests, which are written against the tutorial app, so
+  # a run has to name its test with -only-testing rather than testing the target.
+  if [ -d ios/uitests ]; then
+    cp ios/uitests/*.swift "$GRMOB/ios/GrMobUITests/" 2>/dev/null || true
+  fi
   echo "==> shell: $GRMOB (pristine $want, app id $CATS_APP_ID)"
 fi

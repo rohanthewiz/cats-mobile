@@ -7,3 +7,5 @@ wasm/dist/
 # with cats-mobile's identity stamped on it, plus everything Gradle/Xcode
 # build inside it. Disposable — scripts/lib.sh rebuilds it from a tag.
 .shell/
+# py_compile / imported-module bytecode, e.g. from checking scripts/hook.py
+__pycache__/
