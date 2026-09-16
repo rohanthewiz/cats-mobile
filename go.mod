@@ -12,7 +12,7 @@ go 1.26.1
 // one (TestEveryDownTypeHasAnArm makes that mechanical).
 require (
 	github.com/coder/websocket v1.8.14
-	github.com/rohanthewiz/cats v0.2.3-0.20260904234655-5d1e4a6716fe
+	github.com/rohanthewiz/cats v0.2.3-0.20260916184950-e4919840f1a8
 )
 
 require (

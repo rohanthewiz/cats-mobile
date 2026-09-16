@@ -31,10 +31,34 @@ type Session struct {
 	// Agents is every pane with an agent, across every workspace.
 	Agents []wire.AgentItem
 
+	// Plugins is every pane running a cats plugin action (and every editor
+	// pane, which the server files here for the same reason), in the rollup's
+	// own order: grouped by plugin id, then by pane, so a UI cuts the groups by
+	// walking the list once.
+	//
+	// It arrives on the agents message but is kept apart here exactly as it is
+	// kept apart on the wire. A plugin pane has no agent state and no age —
+	// it is a program, not something taking turns — so merging the two lists
+	// would feed rows with nothing to say into Roster's state grouping and into
+	// the attention watch that reads the roster. Separate lists make that
+	// structural instead of a filter every reader has to remember.
+	Plugins []wire.PluginPane
+
 	// Layout is the active workspace's structure, as built for THIS
 	// connection's view. A viewer renders it; it never causes it, since
 	// nothing in this type sends anything. Nil until the first layout.
 	Layout *wire.Layout
+
+	// WorkspaceGit is the git-sync rollup, keyed by public workspace id: for a
+	// workspace whose start directory is a git checkout, whether its trunk is
+	// level with the remote, ahead of it, or behind it.
+	//
+	// Absence is a real answer, not missing data. The server leaves out every
+	// workspace it has nothing to say about (not a repository, no remote,
+	// unreachable, another machine), and a sweep runs only every two minutes,
+	// so "we do not know" and "we have not asked yet" arrive identically — both
+	// meaning the plain, uncoloured dot. Nil until the first rollup.
+	WorkspaceGit map[string]wire.WorkspaceGitInfo
 
 	// Grids is per-pane, created lazily. Only panes the server actually
 	// streams frames for appear here.
@@ -104,6 +128,19 @@ func (s *Session) Apply(msg any) {
 	switch m := msg.(type) {
 	case *wire.Agents:
 		s.Agents = m.Items
+		s.Plugins = m.Plugins
+	case *wire.WorkspaceGit:
+		// Rebuilt rather than patched. The message carries every workspace the
+		// sweep had an answer for, so a workspace that has dropped out — its
+		// checkout moved, its remote went away, the workspace closed — is
+		// simply absent from the next rollup rather than flagged stale in it.
+		// Replacing the map wholesale is what makes that automatic; patching
+		// one would leave the departed rows behind forever.
+		byWS := make(map[string]wire.WorkspaceGitInfo, len(m.Workspaces))
+		for _, w := range m.Workspaces {
+			byWS[w.Workspace] = w
+		}
+		s.WorkspaceGit = byWS
 	case *wire.Layout:
 		s.Layout = m
 	case *wire.PaneTitle:
@@ -216,6 +253,25 @@ func (s *Session) ResetForNewSocket() {
 	clear(s.Grids)
 	s.Layout = nil
 	s.Clients = nil
+	// The git rollup goes too, for a different reason than the grids: it is the
+	// one on-connect push the server GATES on being non-empty (registerConn
+	// sends it only once a sweep has produced rows, so a session with no local
+	// checkout never sends it at all). The agents and hosts rollups are pushed
+	// unconditionally on every connect, so carrying those across a socket is
+	// harmless — they are overwritten before anything draws. This one is not:
+	// kept, it would let the previous server's answers, or a fresh one's
+	// two-minute silence before its first sweep, sit under the new socket's
+	// workspace ids and colour dots that nobody has vouched for.
+	s.WorkspaceGit = nil
+}
+
+// GitSync is one workspace's git-sync state, and whether the server has said
+// anything about it. Not-found is the ordinary case rather than an error (see
+// WorkspaceGit), so a caller draws the plain dot on false instead of treating
+// it as data that failed to arrive.
+func (s *Session) GitSync(ws string) (wire.WorkspaceGitInfo, bool) {
+	g, ok := s.WorkspaceGit[ws]
+	return g, ok
 }
 
 // --- windows -----------------------------------------------------------------
