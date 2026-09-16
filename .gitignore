@@ -3,3 +3,7 @@
 .vscode/
 .DS_Store
 wasm/dist/
+# The private native shell: a pristine extract of the pinned grmob release
+# with cats-mobile's identity stamped on it, plus everything Gradle/Xcode
+# build inside it. Disposable — scripts/lib.sh rebuilds it from a tag.
+.shell/

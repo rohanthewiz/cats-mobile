@@ -44,6 +44,17 @@ type Services struct {
 	// subscription would otherwise outlive it, resuming a connection whose
 	// test has finished.
 	stopLifecycle func()
+	// stopDeepLink cancels Bind's core.OnDeepLink subscription, for the same
+	// test-binary reason as stopLifecycle.
+	stopDeepLink func()
+	// requestRender asks the render loop for a pass. Held because a deep link
+	// arrives on a host-event goroutine with no context of its own, and the
+	// link it parks is only picked up by a render; see deeplink.go.
+	requestRender func()
+	// linkMu guards pendingLink, a cats://pair link the OS handed the app that
+	// the pair screen has not taken yet.
+	linkMu      sync.Mutex
+	pendingLink string
 }
 
 var (
@@ -96,6 +107,12 @@ func (s *Services) Bind(ctx interface{ RequestRender() }) {
 		// first report can arrive: Android reports a cold-launch tap right
 		// after the runtime starts, which is after this first pass.
 		s.stopTap = core.OnNotificationTap(s.openFromNotification)
+		// A cats://pair link the OS was asked to open. Subscribed here for the
+		// reasons above, and the timing is the same as the notification tap's:
+		// both shells report a cold-launch URL just after the runtime starts,
+		// which is after this first pass. See deeplink.go.
+		s.requestRender = ctx.RequestRender
+		s.stopDeepLink = core.OnDeepLink(s.receiveDeepLink)
 		if endpoint, ok := s.Store.Active(); ok {
 			s.Conn.Connect(endpoint)
 		}

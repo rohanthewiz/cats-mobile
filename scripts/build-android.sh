@@ -6,9 +6,14 @@
 #   scripts/build-android.sh --install  # ...and install on the connected device/emulator
 #
 # Binds grmob's `mobile` bridge (the Kotlin runtime's call surface) plus ./app,
-# whose init calls mobile.Register. The output lands in grmob's own
+# whose init calls mobile.Register. The output lands in the shell's
 # android/app/libs/grmob.aar: the Kotlin shell there is the host, this AAR is
 # the app. Open $GRMOB/android in Android Studio, or pass --apk / --install.
+#
+# That shell is a private copy of the pinned grmob release under .shell/,
+# carrying cats-mobile's own application id — see scripts/lib.sh for why. The
+# app installs as $CATS_APP_ID, so it no longer overwrites (or get overwritten
+# by) grmob's own demo on a shared emulator.
 #
 # Why this runs gomobile here rather than delegating to $GRMOB/android/build.sh:
 # gobind loads packages in the module it is invoked from. Run from grmob, a
@@ -61,7 +66,11 @@ case "$1" in
     if [ "$1" = "--install" ]; then
       echo "==> adb install"
       "$ANDROID_HOME/platform-tools/adb" install -r "$APK"
-      echo "==> installed; launch with: adb shell am start -n com.grmob.app/.MainActivity"
+      # The launch component crosses our applicationId with the shell's own
+      # Kotlin package: lib.sh rewrites the former and leaves the latter, so
+      # the activity class is still com.grmob.app.MainActivity. The `.MainActivity`
+      # shorthand would resolve against our id and find nothing.
+      echo "==> installed; launch with: adb shell am start -n $CATS_APP_ID/com.grmob.app.MainActivity"
     fi
     ;;
   *)

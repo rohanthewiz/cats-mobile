@@ -7,6 +7,11 @@
 # Binds grmob's `mobile` bridge plus ./app into $GRMOB/ios/Frameworks, so open
 # the Xcode project under $GRMOB/ios to run it. Needs full Xcode.
 #
+# $GRMOB is a private copy of the pinned grmob release under .shell/, carrying
+# cats-mobile's own bundle identifier — see scripts/lib.sh for why. The app
+# installs as $CATS_APP_ID, so it no longer shares an identity with grmob's own
+# demo on a simulator both projects are using.
+#
 # Runs gomobile from this module rather than delegating to $GRMOB/ios/build.sh
 # for the reason spelled out in build-android.sh: gobind can only see packages
 # of the module it runs in, and ./app is not one of grmob's.

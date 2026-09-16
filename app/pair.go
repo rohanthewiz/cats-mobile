@@ -68,6 +68,20 @@ func pairScreen(ctx *core.Context) core.View {
 		slot.Set(&next)
 	}
 
+	// A link the OS handed the app arrives here rather than through a tap, and
+	// lands in the field exactly as the Paste button's text does — replacing,
+	// never appending, for the reason spelled out at that button. It is taken
+	// during the render that follows its arrival because the hook slot belongs
+	// to the render loop and the host-event goroutine that received it does
+	// not; see deeplink.go, which also says why a link is not acted on.
+	//
+	// Not a conditional hook: takePendingPairLink reads a mutex-guarded field,
+	// and the hook above it has already run unconditionally.
+	if uri, ok := services.takePendingPairLink(); ok {
+		update(func(f *pairForm) { f.URI = uri; f.Err = "" })
+		form = slot.Get()
+	}
+
 	// submit is shared by both paths. It resolves the grant (from the URI
 	// or the typed fields), then redeems it on its own goroutine: the round
 	// trip must not block the event thread.

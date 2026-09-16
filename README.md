@@ -107,8 +107,23 @@ catway on the same host and trust its certificate in the browser first.
 
 Both scripts bind grmob's `mobile` bridge plus `./app` from *this* module into
 grmob's native shells, so a grmob checkout is needed beside this one (or set
-`GRMOB`). `scripts/lib.sh` warns when that checkout is not at the tag `go.mod`
-builds against; the Kotlin/Swift half and the Go half are versioned together.
+`GRMOB_SRC`). The Kotlin/Swift half and the Go half are versioned together, so
+`scripts/lib.sh` does not build against that checkout's working tree. It
+`git archive`s the tag `go.mod` pins into `.shell/` — reading committed objects
+only, so a grmob checkout that is dirty, mid-rebase or in use elsewhere is
+fine — and stamps cats-mobile's own identity onto the copy:
+
+| | shell's own | ours |
+|---|---|---|
+| application / bundle id | `com.grmob.app`, `com.grmob.demo` | `com.rohanthewiz.catsmobile` |
+| launcher label | GrMob | Cats |
+| URL scheme | `grmob://` | `cats://` |
+
+That is what lets this app and grmob's own demo sit on one emulator or
+simulator without installing over each other. Override any of it with
+`CATS_APP_ID` / `CATS_APP_LABEL` / `CATS_URL_SCHEME`; set `GRMOB` to a
+directory to build against that shell verbatim instead, unpatched and under
+grmob's identity, which is the workflow for editing the shell itself.
 
 ```sh
 go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
@@ -121,6 +136,18 @@ Android emulator the host is `10.0.2.2`; on the iOS simulator it is
 `localhost`. Both shells already permit cleartext to those, so a catway
 started without `--tls` works for development. A real device talks `wss` with
 the certificate pinned on first pair.
+
+Pairing takes the link three ways: typed, pasted (the **Paste link** button),
+or handed to the app by the OS as a `cats://pair` deep link. A deep link fills
+the field and stops there — it never pairs on arrival. A custom scheme is
+claimable by any app on the device and verified by nobody, so the address and
+the Pair button stay in front of the person holding the phone; see
+`app/deeplink.go`. Firing one during development:
+
+```sh
+adb shell am start -a android.intent.action.VIEW -d "cats://pair?u=…&t=…&f=…"
+xcrun simctl openurl booted "cats://pair?u=…&t=…&f=…"
+```
 
 ## CI
 

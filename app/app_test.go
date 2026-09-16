@@ -230,6 +230,9 @@ func resetServicesForTest(t *testing.T) (*fakeDesk, *store.Store) {
 		if services.stopTap != nil {
 			services.stopTap()
 		}
+		if services.stopDeepLink != nil {
+			services.stopDeepLink()
+		}
 		servicesOnce = sync.Once{}
 		services = nil
 		store.Close()
