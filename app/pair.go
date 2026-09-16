@@ -150,6 +150,49 @@ func pairScreen(ctx *core.Context) core.View {
 						update(func(f *pairForm) { f.URI = v; f.Err = "" })
 					}),
 				},
+				// The link is ~130 characters of random token and hex
+				// fingerprint, and it is born in another app — the terminal
+				// running `catctl pair`, or whatever carried it to the phone.
+				// Typing it is not a real path; pasting it is, and without a
+				// button the only paste is the keyboard's own, which is a
+				// long-press away and absent on a hardware keyboard.
+				//
+				// It replaces the field rather than appending to it, which is
+				// where this differs from the composer's Paste: a reply is a
+				// sentence a paste adds to, but a pairing link is a whole
+				// value. Appending onto a stale link could only ever build a
+				// string that parses as nothing.
+				//
+				// Trimmed because a link copied out of a terminal usually
+				// brings a trailing newline, and ParsePairURI would reject it.
+				core.Row(
+					core.Justify(core.JustifyEnd),
+					core.Gap(8),
+					core.PaddingHorizontal(0),
+					core.PaddingVertical(0),
+					comps.Button{
+						Label:    "Paste link",
+						Emphasis: comps.EmphasisGhost,
+						Disabled: form.Busy,
+						OnTap: func() {
+							core.ReadClipboard(func(text string, ok bool) {
+								switch {
+								case !ok:
+									toast("Could not read the clipboard.")
+								case strings.TrimSpace(text) == "":
+									toast("The clipboard has no text.")
+								default:
+									update(func(f *pairForm) {
+										f.URI = strings.TrimSpace(text)
+										f.Err = ""
+									})
+								}
+							})
+						},
+						AccessibilityHint:  "Fills the pairing link field from the clipboard",
+						AccessibilityLabel: "Paste the pairing link",
+					},
+				),
 
 				mutedText(ctx, "Or enter the address and shared password by hand. "+
 					"The first connection will trust whatever certificate it sees; "+

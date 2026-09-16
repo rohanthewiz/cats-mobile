@@ -83,6 +83,26 @@ func TestParsePairURIRejectsEverythingElse(t *testing.T) {
 	}
 }
 
+func TestParsePairURIIgnoresTheCaseOfTheSchemeAndHost(t *testing.T) {
+	// RFC 3986 makes both case-insensitive. This is not academic: a link
+	// entered by hand on iOS comes back with its first letter capitalized by
+	// the keyboard, and rejecting it reads as "that is not a cats pairing
+	// link" — sending the user to mint a fresh code for a link that was fine.
+	//
+	// url.Parse already lowercases the scheme, so the host is the half that
+	// actually needed the fold; the scheme cases are here to pin that.
+	for _, raw := range []string{
+		"cats://pair?u=https%3A%2F%2Fhost%3A9000&t=t",
+		"Cats://pair?u=https%3A%2F%2Fhost%3A9000&t=t",
+		"CATS://PAIR?u=https%3A%2F%2Fhost%3A9000&t=t",
+		"cats://Pair?u=https%3A%2F%2Fhost%3A9000&t=t",
+	} {
+		if _, ok := ParsePairURI(raw); !ok {
+			t.Errorf("%q did not parse; scheme and host case must not matter", raw)
+		}
+	}
+}
+
 func TestParsePairURIBuildsAWSURLFromThePairedAddress(t *testing.T) {
 	grant, ok := ParsePairURI("cats://pair?u=https%3A%2F%2Fhost%3A9000&t=t")
 	if !ok {

@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -87,7 +88,17 @@ type PairGrant struct {
 // one of ours" is the common case, not an error.
 func ParsePairURI(raw string) (PairGrant, bool) {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "cats" || u.Host != "pair" {
+	// Both halves are compared case-insensitively, because RFC 3986 says the
+	// scheme and host are. url.Parse already lowercases the scheme, so "cats"
+	// survives a keyboard that capitalizes the first letter; it does NOT
+	// lowercase the host, so "cats://Pair?…" would otherwise be rejected —
+	// and rejected as "That is not a cats pairing link", which sends the user
+	// to fetch a fresh code for a link that was fine.
+	//
+	// That is not hypothetical: a link entered by hand on iOS came back
+	// mangled by the keyboard's autocapitalization, and this comparison is
+	// the half of it this module can make robust.
+	if err != nil || !strings.EqualFold(u.Scheme, "cats") || !strings.EqualFold(u.Host, "pair") {
 		return PairGrant{}, false
 	}
 	q := u.Query()
