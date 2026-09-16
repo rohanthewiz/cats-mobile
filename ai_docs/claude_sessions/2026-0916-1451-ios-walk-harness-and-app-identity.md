@@ -216,14 +216,24 @@ pattern all afternoon.
 
 ## State at the end
 
-- cats-mobile `main`: `f6d60bd` plus this doc and the walk harness.
-- grmob: **read only, all session**, clean at `00f0c08`.
+- cats-mobile `main`: `8b4bcc7`, pushed, working tree clean. Five commits this
+  session (`f6d60bd`, `87d5a74`, `4de292d`, `1c98716`, `8b4bcc7`).
+- grmob: **read only, all session.** Its checkout is at `00f0c08` and is *dirty*
+  — `core/canvas.go`, `htmlout/canvas.go`, `htmlout/canvas_test.go`, touched at
+  15:29–15:30, none of it mine: it is the other session's chart work, matching
+  that commit's subject. Which is the whole argument for the private shell —
+  a build here no longer cares what state that tree is in.
 - The desk is as found: `w1:p1`, agent `claude`, idle.
-- Devices: emulator-5554 up with both apps installed; iPhone 17 Pro simulator up
-  with both apps installed, **a stale "Open in GrMobApp?" alert on screen**, and
-  an `xcodebuild test` run in flight.
-- Running (kill by pid, never `killall`): catway 47364 on `:8421` and cathost
-  43451, plus six older cats processes from other sessions.
+- Devices, both still shared with another session:
+  - emulator-5554 up, `com.grmob.app` and `com.rohanthewiz.catsmobile` installed
+    side by side.
+  - iPhone 17 Pro booted, `com.grmob.demo` and `com.rohanthewiz.catsmobile`
+    installed and now distinguishable on the home screen ("GrMobApp" / "Cats").
+    The stale alert is gone, no `xcodebuild` is running, and **the app is paired
+    to the catway on `:8421`** — which is the precondition for items 1 and 6 in
+    the list below, and will be lost by a reinstall.
+- Running (kill by pid, never `killall`): nine `catway`/`cathost` processes
+  across sessions, including this walk's catway 47364 on `:8421`.
 
 ## Next
 
@@ -265,8 +275,9 @@ defect; low = nobody has hit it, or contingent.
    runtime JS from whatever is checked out there, so it now carries a drift
    exposure the native scripts no longer have. Point it at `.shell/` too.
 8. **church_mobile form copy-on-write race** **(age 10 · value low)**. Unchanged.
-9. **Leftover processes** **(age 9 · value low)**. Eight cats processes across
-   five sessions, plus two shared devices.
+9. **Leftover processes** **(age 9 · value low)**. Nine `catway`/`cathost`
+   processes across sessions, plus two shared devices. Note the simulator's app
+   is currently paired and a reinstall drops that.
 10. **Followed window closes: no badge, no census note** **(age 7 · value low)**.
 11. **iOS `App/` Swift only compiled by a local xcodebuild** **(age 6 · value
     medium)**. The gap is CI, not the harness — and CI could now also run the
