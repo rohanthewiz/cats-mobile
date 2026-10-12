@@ -159,12 +159,64 @@ func (g *PaneGrid) ApplyDiff(diff *wire.PaneDiff) {
 	}
 	g.Scroll = diff.Scroll // nil CLEARS; see the field doc
 
+	// The shift lands BEFORE the cells: the server took the diff's runs
+	// against the already-scrolled grid (wire.PaneDiff). Patching first and
+	// scrolling after would move every changed cell up by Shift rows.
+	if diff.Shift > 0 {
+		g.shiftUp(diff.Shift)
+	}
+
 	for _, cell := range diff.Cells {
 		if cell.I < 0 || cell.I >= len(g.fg) {
 			g.DroppedCells++
 			continue
 		}
 		g.set(cell.I, cell.Cell, g.defFg, g.defBg)
+	}
+}
+
+// shiftUp scrolls the grid up by n rows, the PaneDiff.Shift a client gets once
+// it lists wire.FeaturePaneShift in Init.Features (conn.go handshake):
+//
+//	before            after shiftUp(2)
+//	row 0  aaaa       row 0  cccc
+//	row 1  bbbb       row 1  dddd
+//	row 2  cccc       row 2  ····   blank: " ", the frame's default colours,
+//	row 3  dddd       row 3  ····   no attributes, no link
+//
+// It is what keeps scrolling output (a build log, a streaming agent) from
+// arriving as a full frame per tick: the server sends the shift plus the new
+// bottom line rather than every cell that moved. Each of the five column
+// slices moves the same way, with one copy apiece.
+//
+// Every row is marked dirty, because every row's content changed even though
+// the wire carried almost none of it. A shift of the whole height or more is a
+// screen with nothing left from before: it blanks everything rather than
+// indexing past the end. The server never sends one (it falls back to a full
+// frame), so that branch exists to keep a bad message from panicking.
+func (g *PaneGrid) shiftUp(n int) {
+	if g.w == 0 || g.h == 0 {
+		return
+	}
+	from := 0
+	if n < g.h {
+		k := n * g.w
+		copy(g.fg, g.fg[k:])
+		copy(g.bg, g.bg[k:])
+		copy(g.attr, g.attr[k:])
+		copy(g.link, g.link[k:])
+		copy(g.glyph, g.glyph[k:])
+		from = len(g.fg) - k
+	}
+	for i := from; i < len(g.fg); i++ {
+		g.fg[i] = g.defFg
+		g.bg[i] = g.defBg
+		g.attr[i] = 0
+		g.link[i] = 0
+		g.glyph[i] = " "
+	}
+	for i := range g.dirty {
+		g.dirty[i] = true
 	}
 }
 

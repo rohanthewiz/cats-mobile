@@ -242,6 +242,11 @@ func (c *Conn) handshake() {
 		CellHPx:   0,
 		Viewer:    true,
 		Workspace: c.pinnedWorkspace,
+		// pane_shift: PaneGrid.ApplyDiff scrolls the grid before patching
+		// (shiftUp), so a scrolling pane arrives as a shift plus a line or two
+		// of cells instead of a full frame per tick. An older catway ignores
+		// the field and keeps sending full frames, which the grid also takes.
+		Features: []string{wire.FeaturePaneShift},
 	}
 	raw, err := wire.Marshal(init)
 	if err != nil {

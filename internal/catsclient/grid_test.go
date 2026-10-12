@@ -201,3 +201,43 @@ func TestWideGlyphTailCellIsEmptyNotASpace(t *testing.T) {
 		t.Error("an out-of-range row is empty, not a panic")
 	}
 }
+
+// A shift scrolls the grid up before the diff's cells land (wire.PaneDiff):
+// row r takes row r+Shift, the vacated bottom rows are blanks in the frame's
+// default colours, the cells then patch the SHIFTED grid, and every row is
+// dirty.
+func TestApplyDiffShiftScrollsBeforeTheCellsLand(t *testing.T) {
+	g := NewPaneGrid(1)
+	g.ApplyFrame(defaultFrame()) // 4×3: "abcd" / "efgh" / "ijkl"
+	g.ClearDirty()
+	g.ApplyDiff(&wire.PaneDiff{T: wire.MsgPaneDiff, Pane: 1, Shift: 1,
+		Cells: []wire.DiffCell{{I: 8, Cell: wire.Cell{S: "$", F: 0x02ff0000}}}})
+
+	glyphs := g.Glyph()
+	want := []string{"e", "f", "g", "h", "i", "j", "k", "l", "$", " ", " ", " "}
+	for i, w := range want {
+		if glyphs[i] != w {
+			t.Fatalf("glyph[%d] = %q, want %q (grid %q)", i, glyphs[i], w, glyphs)
+		}
+	}
+	if g.Fg()[8] != 0x02ff0000 {
+		t.Errorf("the patched cell lost its colour: %x", g.Fg()[8])
+	}
+	if g.Fg()[9] != 0x02c0c0c0 || g.Bg()[9] != 0x02000000 {
+		t.Errorf("a vacated cell is not in the frame defaults: fg %x bg %x", g.Fg()[9], g.Bg()[9])
+	}
+	if !all(g.DirtyRows(), true) {
+		t.Errorf("dirty = %v, want every row after a shift", g.DirtyRows())
+	}
+}
+
+// A shift of the whole height (never sent: the server falls back to a full
+// frame) blanks the grid instead of indexing past it.
+func TestApplyDiffShiftOfTheWholeHeightBlanks(t *testing.T) {
+	g := NewPaneGrid(1)
+	g.ApplyFrame(defaultFrame())
+	g.ApplyDiff(&wire.PaneDiff{T: wire.MsgPaneDiff, Pane: 1, Shift: 7})
+	if !all(g.Glyph(), " ") {
+		t.Errorf("glyphs = %q, want all blank", g.Glyph())
+	}
+}
