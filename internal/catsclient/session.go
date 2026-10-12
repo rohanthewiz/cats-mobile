@@ -203,6 +203,7 @@ var ignoredDownTypes = map[wire.Type]string{
 	wire.MsgCmdResult:    "settled by Conn: it answers the pending Invoke",
 	wire.MsgClipboard:    "an OSC 52 write from a pane; a viewer does not own the desktop's clipboard",
 	wire.MsgHistory:      "the command ledger, a desktop-only section for now",
+	wire.MsgPluginNotice: "a failed default-plugin install; the phone draws no plugins list yet (cats N-020)",
 	wire.MsgChatState:    "the ACP chat surface is out of scope for the phone's first release",
 	wire.MsgChatSnapshot: "the ACP chat surface is out of scope for the phone's first release",
 	wire.MsgChatRow:      "the ACP chat surface is out of scope for the phone's first release",

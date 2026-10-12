@@ -8,6 +8,8 @@ github.com/rohanthewiz/bytdb v0.11.0 h1:s7SyK5clCv7DKkNOkIzmBQ0iPDXCEXnamhP1g/O+
 github.com/rohanthewiz/bytdb v0.11.0/go.mod h1:HKuQb7ptS/dPzagWWttvfy1qkQulke/p8JUHZeDOvO4=
 github.com/rohanthewiz/cats v0.2.3 h1:T01m7e0OTl6D6M65cpTtwHbUsPSUwDg2h3gQjlvFHyA=
 github.com/rohanthewiz/cats v0.2.3/go.mod h1:uNw5FETji/zRfePN9Dg0VxbsLxO5AmLUdl31cCa5KFA=
+github.com/rohanthewiz/cats v0.4.0 h1:26jRC2D8QJRNHmR+z5OAhIYj/PRLKRM8Ap/gkJVq78s=
+github.com/rohanthewiz/cats v0.4.0/go.mod h1:incE/ifvIq051jLkV1SBal+gDmxuzmawlzWcetWBlvI=
 github.com/rohanthewiz/element v0.7.0 h1:vLPrti03a7EevsBVeM8TAWsMLmg8UM8owXwe5Vf1rI0=
 github.com/rohanthewiz/element v0.7.0/go.mod h1:YZnKqWX2lSsR+zi06x3vhViYVoOSx8xHQjUMTmM/FLo=
 github.com/rohanthewiz/grmob v0.5.0 h1:4euZtCu/aBDMNwicEgFzVpg/71YWXbfv875GbAFsfII=
