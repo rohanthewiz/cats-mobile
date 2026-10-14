@@ -372,6 +372,43 @@ func TestWindowsAnUnpinnedViewerFollowsThePrimarySoBothAgree(t *testing.T) {
 	}
 }
 
+// The followed window closes: its workspace keeps running and the server
+// keeps this view on it, so the census has no window to join to the layout's
+// active workspace. That is a state to report, not an absence to ignore.
+func TestWindowsAViewWhoseWindowClosedIsReportedByName(t *testing.T) {
+	s := NewSession()
+	s.Apply(decode(t, layoutShowing("w2")))
+	s.Apply(decode(t, censusOf(windowOnW1, windowOnW2)))
+	if label, ok := s.ViewWithoutWindow(); ok {
+		t.Errorf("w2 has a window, yet ViewWithoutWindow = %q", label)
+	}
+
+	// The w2 window closes. The layout still shows w2.
+	s.Apply(decode(t, censusOf(windowOnW1)))
+	if s.FollowedWindow() != nil {
+		t.Fatal("no window shows w2 any more")
+	}
+	label, ok := s.ViewWithoutWindow()
+	if !ok || label != "gonotes" {
+		t.Errorf("ViewWithoutWindow = %q, %v; want the workspace's name", label, ok)
+	}
+}
+
+// Before both server facts are in, there is nothing to say: a census with no
+// layout has no view, and a layout with no census has no windows to miss.
+func TestWindowsViewWithoutWindowWaitsForBothCensusAndLayout(t *testing.T) {
+	s := NewSession()
+	s.Apply(decode(t, layoutShowing("w2")))
+	if _, ok := s.ViewWithoutWindow(); ok {
+		t.Error("a layout alone is not evidence that a window is missing")
+	}
+	s2 := NewSession()
+	s2.Apply(decode(t, censusOf(windowOnW1)))
+	if _, ok := s2.ViewWithoutWindow(); ok {
+		t.Error("a census alone has no view to miss")
+	}
+}
+
 func TestWindowsACensusBeforeTheFirstLayoutStillListsWindows(t *testing.T) {
 	s := NewSession()
 	s.Apply(decode(t, censusOf(windowOnW1)))

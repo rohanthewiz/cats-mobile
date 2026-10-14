@@ -723,6 +723,49 @@ func TestWindowsTabFollowsAWindowThroughTheCapability(t *testing.T) {
 	}
 }
 
+// The followed window closes and the phone stays on its workspace (a pin
+// names a workspace, not a window). Nothing in the list can wear the Showing
+// badge, so the census line and a notice must say what the phone is on, and
+// both must go again once a window shows that workspace.
+func TestWindowsTabSaysSoWhenTheFollowedWindowCloses(t *testing.T) {
+	h := newHarness(t, true)
+	s := h.connect()
+	layout := map[string]any{"t": "layout", "workspaces": []any{
+		map[string]any{"id": "w1", "name": "cats"},
+		map[string]any{"id": "w2", "name": "grmob", "active": true},
+	}, "tabs": []any{}, "panes": []any{}, "borders": []any{}}
+	s.deliver(layout)
+	// Only the w1 window is left; the phone's view is still w2.
+	s.deliver(map[string]any{"t": "clients", "total": 2, "sizers": 1, "cols": 200, "rows": 60, "views": []any{
+		map[string]any{"workspace": "w1", "cols": 200, "rows": 60, "focused": true, "primary": true},
+		map[string]any{"workspace": "w2", "viewer": true},
+	}})
+	h.waitFor("claude-opus-5")
+
+	h.tap("Windows")
+	h.waitFor("No desktop window is showing grmob")
+	out := gohtml.UnescapeString(h.html())
+	if !strings.Contains(out, "showing grmob (no window)") {
+		t.Errorf("the census line does not say what the phone is on:\n%s", out)
+	}
+	if strings.Contains(out, "Showing") {
+		t.Errorf("a window row claims to be showing what no window shows:\n%s", out)
+	}
+
+	// A window opens on w2 again: the ordinary badge and line come back and
+	// the notice goes.
+	s.deliver(map[string]any{"t": "clients", "total": 3, "sizers": 2, "cols": 200, "rows": 60, "views": []any{
+		map[string]any{"workspace": "w1", "cols": 200, "rows": 60, "focused": true, "primary": true},
+		map[string]any{"workspace": "w2", "cols": 120, "rows": 40},
+		map[string]any{"workspace": "w2", "viewer": true},
+	}})
+	h.waitFor("Showing")
+	out = gohtml.UnescapeString(h.html())
+	if strings.Contains(out, "No desktop window is showing") || strings.Contains(out, "(no window)") {
+		t.Errorf("the windowless notice outlived the window's return:\n%s", out)
+	}
+}
+
 // The git rollup reaches the window rows, and a workspace the sweep said
 // nothing about stays silent rather than borrowing its neighbour's answer.
 // That is the whole risk in drawing this: the rollup is keyed by workspace and

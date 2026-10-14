@@ -394,6 +394,49 @@ func (s *Session) FollowedWindow() *DesktopWindow {
 	return nil
 }
 
+// ViewWithoutWindow reports the workspace this connection is being shown when
+// no desktop window shows it: the label (name, or id before the layout names
+// it) and true. It reports false while the census or the layout has not
+// arrived, and whenever FollowedWindow would return a window.
+//
+// # How a view loses its window
+//
+// A follow pins a WORKSPACE, not a window: the census gives connections no
+// ids, so a workspace is the only thing a pin can name. When the followed
+// window closes, its workspace keeps running and the server keeps this
+// connection on it, which is correct, since that is what the phone asked
+// to watch. But FollowedWindow is a join on the census, and the census has
+// just lost the one entry that joined. Without this question a screen sees
+// "followed: nil" and says nothing, so the phone is left watching a
+// workspace that no window on screen accounts for.
+//
+//	before                         after the w2 window closes
+//	census: w1 (primary), w2       census: w1 (primary)
+//	layout: w2 active              layout: w2 active   <- still pinned
+//	FollowedWindow -> w2           FollowedWindow -> nil
+//	                               ViewWithoutWindow -> "w2", true
+//
+// It is read from the same two server facts as FollowedWindow (the layout's
+// active flag and the census), never from the local pin. An unpinned viewer
+// can land here too, for a moment, if a census and a layout cross on the wire.
+// The answer is still true of what is on screen, so the caller doesn't need to
+// know whether a pin is involved.
+func (s *Session) ViewWithoutWindow() (string, bool) {
+	view := s.ViewWorkspace()
+	if view == "" || s.Clients == nil {
+		return "", false
+	}
+	if s.FollowedWindow() != nil {
+		return "", false
+	}
+	for _, w := range s.Layout.Workspaces {
+		if w.ID == view && w.Name != "" {
+			return w.Name, true
+		}
+	}
+	return view, true
+}
+
 // PrimaryWindow is the primary view: the desktop window every view-less
 // caller and every unpinned viewer resolves through. Nil before the first
 // census.

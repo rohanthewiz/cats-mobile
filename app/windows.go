@@ -34,12 +34,16 @@ func windowsScreen(ctx *core.Context) core.View {
 
 	var windows []catsclient.DesktopWindow
 	var followed *catsclient.DesktopWindow
+	var orphan string // the view's workspace, when no window shows it
 	var census *wire.Clients
 	var viewers int
 	gitByWS := map[string]wire.WorkspaceGitInfo{}
 	conn.Read(func(s *catsclient.Session) {
 		windows = s.DesktopWindows()
 		followed = s.FollowedWindow()
+		if label, ok := s.ViewWithoutWindow(); ok {
+			orphan = label
+		}
 		census = s.Clients
 		viewers = s.ViewerCount()
 		// Copied out row by row rather than carried as a map reference. The
@@ -80,8 +84,20 @@ func windowsScreen(ctx *core.Context) core.View {
 		core.Row(
 			core.PaddingHorizontal(16),
 			core.PaddingVertical(8),
-			mutedText(ctx, censusLine(census, viewers, followed)),
+			mutedText(ctx, censusLine(census, viewers, followed, orphan)),
 		),
+	}
+	// The followed window closed and the phone is still on its workspace
+	// (see Session.ViewWithoutWindow). There is no row to put the Showing
+	// badge on: the rows are windows, and inventing one for a workspace no
+	// window shows would put a desktop window on screen that does not exist.
+	// So the census line names it, and this strip says why nothing below is
+	// marked and what to do. The way out is the release button at the
+	// bottom of the list or a tap on a row. The strip carries no button of
+	// its own, so the screen never shows two buttons for the same command.
+	if orphan != "" {
+		items = append(items, noticeStrip(ctx,
+			"No desktop window is showing "+orphan+" now. The phone stays on it until you pick a window or follow the primary view.", "", nil))
 	}
 	if unsupported {
 		items = append(items, noticeStrip(ctx,
@@ -112,7 +128,11 @@ func windowsScreen(ctx *core.Context) core.View {
 
 // censusLine is the one-line summary above the list: how many connections,
 // how many of them are phones, and which window this one is looking through.
-func censusLine(c *wire.Clients, viewers int, followed *catsclient.DesktopWindow) string {
+// orphan is the workspace being shown when no window shows it (""
+// otherwise). It still gets a "showing" clause, marked as windowless, because
+// dropping the clause would leave the line silent about what is on the phone
+// at exactly the moment that has stopped being obvious.
+func censusLine(c *wire.Clients, viewers int, followed *catsclient.DesktopWindow, orphan string) string {
 	line := fmt.Sprintf("%d connected", c.Total)
 	if viewers > 0 {
 		line += fmt.Sprintf(", %d viewing", viewers)
@@ -122,6 +142,8 @@ func censusLine(c *wire.Clients, viewers int, followed *catsclient.DesktopWindow
 	}
 	if followed != nil {
 		line += bullet + "showing " + followed.Label()
+	} else if orphan != "" {
+		line += bullet + "showing " + orphan + " (no window)"
 	}
 	return line
 }
