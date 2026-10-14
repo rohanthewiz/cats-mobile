@@ -99,6 +99,15 @@ func stabilize(rendered string) string {
 var ageToken = regexp.MustCompile(`((?:·|&middot;|&#183;|&#xb7;) |started )\d+(?:s|m|d|h \d\dm)`)
 
 func TestSnapshotAgents(t *testing.T) { snapshot(t, "agents", nil) }
+
+// The agents screen with plugin panes of both kinds, so the shape of the two
+// plugin sections and the hairline between plugin blocks is pinned too.
+func TestSnapshotAgentsPlugins(t *testing.T) {
+	snapshot(t, "agents_plugins", func(h *harness) {
+		h.desk.socket(h.t, 0).deliver(agentsRollupWithPlugins())
+		h.waitFor("helper-bot")
+	})
+}
 func TestSnapshotWindows(t *testing.T) {
 	snapshot(t, "windows", func(h *harness) { h.tap("Windows") })
 }

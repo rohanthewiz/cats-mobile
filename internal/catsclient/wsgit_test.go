@@ -98,3 +98,44 @@ func TestAgentsRollupKeepsPluginsOutOfTheRoster(t *testing.T) {
 		t.Errorf("plugin pane folded wrong: %+v", p)
 	}
 }
+
+// The split must agree with the desktop's on every type, the unknown ones most
+// of all: only the exact word "agent" goes to agents, and an untyped plugin, an
+// editor, or a type this build has never heard of is a tool. Order within each
+// half is the rollup's, since the UI cuts per-plugin blocks by walking it.
+func TestSplitPluginsRoutesOnlyAgentTypeToAgents(t *testing.T) {
+	s := NewSession()
+	s.Apply(decode(t, map[string]any{
+		"t":     "agents",
+		"items": []any{},
+		"plugins": []any{
+			map[string]any{"pane": 2, "pub": "w1:p2", "workspace": "w1", "plugin": "ced", "type": "editor"},
+			map[string]any{"pane": 3, "pub": "w1:p3", "workspace": "w1", "plugin": "acme.bot", "type": "agent"},
+			map[string]any{"pane": 4, "pub": "w1:p4", "workspace": "w1", "plugin": "acme.bot", "type": "agent"},
+			map[string]any{"pane": 5, "pub": "w1:p5", "workspace": "w1", "plugin": "acme.dev", "type": "dev_server"},
+			map[string]any{"pane": 6, "pub": "w1:p6", "workspace": "w1", "plugin": "rohanthewiz.cats-todo"},
+			map[string]any{"pane": 8, "pub": "w1:p8", "workspace": "w1", "plugin": "x.agentish", "type": "agents"},
+		},
+	}))
+
+	agents, tools := s.SplitPlugins()
+	plugPubs := func(ps []wire.PluginPane) []string {
+		out := make([]string, len(ps))
+		for i, p := range ps {
+			out[i] = p.Pub
+		}
+		return out
+	}
+	if got := plugPubs(agents); !equalStrings(got, []string{"w1:p3", "w1:p4"}) {
+		t.Errorf("agent plugins = %v, want only the two typed exactly \"agent\"", got)
+	}
+	if got := plugPubs(tools); !equalStrings(got, []string{"w1:p2", "w1:p5", "w1:p6", "w1:p8"}) {
+		t.Errorf("tool plugins = %v, want everything else in rollup order", got)
+	}
+	// The halves are copies: the next rollup must not be able to rewrite rows a
+	// render pass is still holding.
+	agents[0].Title = "mutated"
+	if s.Plugins[1].Title != "" {
+		t.Error("SplitPlugins returned a view into the session's slice")
+	}
+}

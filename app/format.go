@@ -81,6 +81,34 @@ func agentTitle(item wire.AgentItem) string {
 	}
 }
 
+// pluginShort is a plugin id without its owner prefix: "rohanthewiz.cats-todo"
+// becomes "cats-todo". The prefix is what keeps ids unique across authors, but
+// on a row it is the same word on every line, and the half after the last dot
+// is the one that tells rows apart. An id with no dot (an editor pane filed
+// under its agent label, "ced") is already short. Matches the desktop's
+// pluginShort in 17-agentlist.js.
+func pluginShort(id string) string {
+	if i := strings.LastIndexByte(id, '.'); i >= 0 {
+		return id[i+1:]
+	}
+	return id
+}
+
+// pluginTypeLabel is the short word a plugin row shows for its type. The role
+// suffixes "_mgr" and "_client" are dropped, as the desktop drops them: the
+// section heading already says these are tools, and "todos" / "http" / "db"
+// read faster than the manifest spellings. An unknown type is shown as sent
+// (less a suffix), so a plugin newer than this app still says what it is. ""
+// for an untyped plugin, which then shows no badge at all.
+func pluginTypeLabel(t string) string {
+	for _, suffix := range []string{"_mgr", "_client"} {
+		if strings.HasSuffix(t, suffix) {
+			return strings.TrimSuffix(t, suffix)
+		}
+	}
+	return t
+}
+
 // joinNonEmpty joins the non-empty parts with sep, for subtitles built from
 // optional facts.
 func joinNonEmpty(sep string, parts ...string) string {

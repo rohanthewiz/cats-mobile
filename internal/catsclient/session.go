@@ -203,7 +203,7 @@ var ignoredDownTypes = map[wire.Type]string{
 	wire.MsgCmdResult:    "settled by Conn: it answers the pending Invoke",
 	wire.MsgClipboard:    "an OSC 52 write from a pane; a viewer does not own the desktop's clipboard",
 	wire.MsgHistory:      "the command ledger, a desktop-only section for now",
-	wire.MsgPluginNotice: "a failed default-plugin install; the phone draws no plugins list yet (cats N-020)",
+	wire.MsgPluginNotice: "a failed default-plugin install; the phone lists running plugin panes but installs nothing, so it has no surface to report one on",
 	wire.MsgChatState:    "the ACP chat surface is out of scope for the phone's first release",
 	wire.MsgChatSnapshot: "the ACP chat surface is out of scope for the phone's first release",
 	wire.MsgChatRow:      "the ACP chat surface is out of scope for the phone's first release",
@@ -443,6 +443,31 @@ func (s *Session) Roster() []wire.AgentItem {
 		)
 	})
 	return sorted
+}
+
+// SplitPlugins divides the plugin panes between the two places the desktop
+// sidebar draws them: agent-typed plugins join the agents, and everything else
+// (editors, backlogs, the untyped, and any type this build has never heard of)
+// is a tool.
+//
+// The test is wire.IsAgentPluginType rather than a local comparison so the
+// phone and the desktop cannot drift on what counts as an agent: an unknown
+// type has to land in tools on both, or a plugin newer than the app would
+// change sections depending on which screen you looked at.
+//
+// Both halves keep the rollup's order, which is grouped by plugin id, so a
+// caller can still cut each half into per-plugin blocks by walking it once.
+// The halves are fresh slices, never views into s.Plugins, because the next
+// rollup replaces that slice on the reader goroutine.
+func (s *Session) SplitPlugins() (agents, tools []wire.PluginPane) {
+	for _, p := range s.Plugins {
+		if wire.IsAgentPluginType(p.Type) {
+			agents = append(agents, p)
+		} else {
+			tools = append(tools, p)
+		}
+	}
+	return agents, tools
 }
 
 // groupRank: blocked → working → done-unseen → idle → anything else.

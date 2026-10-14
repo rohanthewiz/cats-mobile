@@ -476,6 +476,87 @@ func TestRosterGroupsAgentsByStateOnceTheRollupLands(t *testing.T) {
 	}
 }
 
+// agentsRollupWithPlugins is the standard roster plus one plugin pane of each
+// kind: an agent-typed plugin, and two tool plugins (an editor and an untyped
+// backlog), in the rollup's own plugin-id order.
+func agentsRollupWithPlugins() map[string]any {
+	m := agentsRollup()
+	m["plugins"] = []any{
+		map[string]any{"pane": 11, "pub": "w1:p11", "workspace": "w1", "tab": 1,
+			"plugin": "acme.helper-bot", "type": "agent", "title": "helper ready"},
+		map[string]any{"pane": 12, "pub": "w1:p12", "workspace": "w1", "tab": 1,
+			"plugin": "ced", "type": "editor", "title": "main.go — ced"},
+		map[string]any{"pane": 13, "pub": "w2:p13", "workspace": "w2", "tab": 2,
+			"plugin": "rohanthewiz.cats-todo", "type": "todos_mgr", "title": "todo: cats (3)"},
+	}
+	return m
+}
+
+// Plugin panes split by type the way the desktop sidebar splits them: the
+// agent-typed one under the roster in a section of its own, the rest under
+// PLUGINS. The roster itself is untouched: no plugin row borrows a state
+// badge, since a plugin has no state to report.
+func TestPluginPanesSplitBetweenAgentsAndPlugins(t *testing.T) {
+	h := newHarness(t, true)
+	s := h.connect()
+	s.deliver(agentsRollupWithPlugins())
+	h.waitFor("helper-bot")
+	h.settle()
+
+	out := gohtml.UnescapeString(h.html())
+	for _, want := range []string{
+		"AGENT PLUGINS", "helper-bot", "helper ready",
+		"ced", "main.go — ced", "editor",
+		"cats-todo", "todo: cats (3)", "todos", "w2:p13",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("agents screen is missing %q:\n%s", want, out)
+		}
+	}
+	// The owner prefix is dropped from the row, and the type's role suffix
+	// from the badge.
+	if strings.Contains(out, "rohanthewiz.cats-todo") || strings.Contains(out, "todos_mgr") {
+		t.Errorf("plugin row shows the long id or the raw type:\n%s", out)
+	}
+	// Order: the state groups, then the agent plugin, then the tools. "PLUGINS"
+	// is looked for after "AGENT PLUGINS" so the first does not match inside
+	// the second.
+	idle := strings.Index(out, "IDLE")
+	agentSec := strings.Index(out, "AGENT PLUGINS")
+	bot := strings.Index(out, "helper-bot")
+	toolSec := agentSec + len("AGENT PLUGINS") + strings.Index(out[agentSec+len("AGENT PLUGINS"):], "PLUGINS")
+	todo := strings.Index(out, "todo: cats (3)")
+	if !(idle < agentSec && agentSec < bot && bot < toolSec && toolSec < todo) {
+		t.Errorf("sections out of order: idle=%d agent-plugins=%d bot=%d plugins=%d todo=%d",
+			idle, agentSec, bot, toolSec, todo)
+	}
+	// The three agents still carry the only state badges.
+	if strings.Contains(out, "Unknown") {
+		t.Errorf("a plugin row drew a state badge:\n%s", out)
+	}
+}
+
+// With no agents at all, tool plugins still show, and the empty note still
+// says there are no agents: a backlog open in a pane is not one.
+func TestToolPluginsAloneKeepTheNoAgentsNote(t *testing.T) {
+	h := newHarness(t, true)
+	s := h.connect()
+	s.deliver(map[string]any{"t": "agents", "items": []any{}, "plugins": []any{
+		map[string]any{"pane": 13, "pub": "w1:p13", "workspace": "w1",
+			"plugin": "rohanthewiz.cats-todo", "type": "todos_mgr", "title": "todo: cats (3)"},
+	}})
+	h.waitFor("todo: cats (3)")
+	h.settle()
+
+	out := gohtml.UnescapeString(h.html())
+	if !strings.Contains(out, "No agents running") || !strings.Contains(out, "PLUGINS") {
+		t.Errorf("want the no-agents note and a PLUGINS section:\n%s", out)
+	}
+	if strings.Contains(out, "AGENT PLUGINS") {
+		t.Errorf("an empty AGENT PLUGINS section was drawn:\n%s", out)
+	}
+}
+
 func TestOpeningAPaneShowsItsGridAndADiffUpdatesIt(t *testing.T) {
 	h := newHarness(t, true)
 	s := h.connect()
